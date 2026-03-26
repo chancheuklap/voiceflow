@@ -9,17 +9,66 @@ class Voiceflow < Formula
 
   def install
     system "swift", "build", "-c", "release", "--disable-sandbox"
-    bin.install ".build/release/VoiceFlow"
-    (share/"voiceflow").install "assets/icon.png"
+
+    # 构建 .app 包
+    app_dir = prefix/"VoiceFlow.app/Contents"
+    (app_dir/"MacOS").install ".build/release/VoiceFlow"
+    (app_dir/"Resources").install "assets/VoiceFlow.icns" => "AppIcon.icns"
+    (app_dir/"Resources").install "assets/icon.png"
+
+    # Info.plist
+    (app_dir/"Info.plist").write <<~PLIST
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+      <dict>
+        <key>CFBundleName</key>
+        <string>VoiceFlow</string>
+        <key>CFBundleDisplayName</key>
+        <string>VoiceFlow</string>
+        <key>CFBundleIdentifier</key>
+        <string>com.voiceflow.app</string>
+        <key>CFBundleVersion</key>
+        <string>#{version}</string>
+        <key>CFBundleShortVersionString</key>
+        <string>#{version}</string>
+        <key>CFBundleExecutable</key>
+        <string>VoiceFlow</string>
+        <key>CFBundleIconFile</key>
+        <string>AppIcon</string>
+        <key>CFBundlePackageType</key>
+        <string>APPL</string>
+        <key>LSMinimumSystemVersion</key>
+        <string>13.0</string>
+        <key>LSUIElement</key>
+        <true/>
+        <key>NSMicrophoneUsageDescription</key>
+        <string>VoiceFlow 需要麦克风权限来进行语音输入</string>
+      </dict>
+      </plist>
+    PLIST
+
+    # 同时保留命令行入口
+    bin.install_symlink app_dir/"MacOS/VoiceFlow"
+  end
+
+  def post_install
+    # 链接 .app 到 /Applications
+    app_src = prefix/"VoiceFlow.app"
+    app_dst = Pathname("/Applications/VoiceFlow.app")
+    app_dst.unlink if app_dst.symlink?
+    app_dst.make_symlink(app_src) unless app_dst.exist?
   end
 
   def caveats
     <<~EOS
-      VoiceFlow 需要辅助功能和麦克风权限。
-      首次运行时系统会弹窗请求授权。
+      VoiceFlow 已安装到启动台（/Applications/VoiceFlow.app）。
 
-      启动: VoiceFlow
-      开机自启: 在菜单栏图标中开启 "Launch at Login"
+      首次使用需授权：
+        系统设置 → 隐私与安全性 → 辅助功能 → 添加 VoiceFlow
+
+      开机自启（LaunchAgent）：
+        在菜单栏 VoiceFlow 图标中开启 "Launch at Login"
     EOS
   end
 
