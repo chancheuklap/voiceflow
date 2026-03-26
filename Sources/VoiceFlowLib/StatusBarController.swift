@@ -131,6 +131,16 @@ class StatusBarController: NSObject {
         toggleItem.state = (config.toggleMode?.value ?? false) ? .on : .off
         menu.addItem(toggleItem)
 
+        let launchTarget = MenuItemTarget { [weak self] in
+            LaunchAtLogin.toggle()
+            self?.buildMenu()
+        }
+        menuItemTargets.append(launchTarget)
+        let launchItem = NSMenuItem(title: "Launch at Login", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+        launchItem.target = launchTarget
+        launchItem.state = LaunchAtLogin.isEnabled ? .on : .off
+        menu.addItem(launchItem)
+
         // ── 工具 ──
 
         menu.addItem(NSMenuItem.separator())

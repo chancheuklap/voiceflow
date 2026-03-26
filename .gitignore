@@ -3,3 +3,4 @@
 *.xcodeproj
 *.app
 .DS_Store
+logs/
