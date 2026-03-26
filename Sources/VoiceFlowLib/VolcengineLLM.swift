@@ -15,10 +15,18 @@ public class VolcengineLLM: LLMProvider {
     public func process(text: String, preset: Preset) async throws -> String {
         let url = URL(string: "\(baseURL)/chat/completions")!
 
+        // 加载词典和个人偏好，组合成完整的 system prompt
+        let dictionary = PresetManager.loadDictionary()
+        let preference = PresetManager.loadPersonalPreference()
+        let fullSystemPrompt = preset.buildFullSystemPrompt(
+            dictionary: dictionary,
+            personalPreference: preference
+        )
+
         let body: [String: Any] = [
             "model": model,
             "messages": [
-                ["role": "system", "content": preset.systemPrompt],
+                ["role": "system", "content": fullSystemPrompt],
                 ["role": "user", "content": preset.buildUserPrompt(asrText: text)],
             ],
             "temperature": 0.3,
