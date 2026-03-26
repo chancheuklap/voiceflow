@@ -134,12 +134,12 @@ class AudioRecorder {
             sum += sample * sample
         }
         let rms = sqrt(sum / Float(frameCount))
-        // 快速响应：上升快、下降略慢，更灵动
-        let normalized = min(1.0, rms * 5.0)
+        // 高增益：正常说话的 RMS 约 0.01-0.05，乘以 20 得到 0.2-1.0
+        let normalized = min(1.0, rms * 20.0)
         if normalized > currentLevel {
-            currentLevel = currentLevel * 0.15 + normalized * 0.85 // 快速上升
+            currentLevel = currentLevel * 0.1 + normalized * 0.9  // 极快上升
         } else {
-            currentLevel = currentLevel * 0.6 + normalized * 0.4  // 较快下降
+            currentLevel = currentLevel * 0.5 + normalized * 0.5  // 快速下降
         }
     }
 }

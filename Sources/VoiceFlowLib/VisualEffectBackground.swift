@@ -1,29 +1,44 @@
 import AppKit
 import SwiftUI
 
-/// 将 NSVisualEffectView 包装为 SwiftUI 背景
-/// 这样毛玻璃效果在 SwiftUI 内部渲染，不会被 NSHostingView 的默认背景遮挡
-struct VisualEffectBackground: NSViewRepresentable {
-    let material: NSVisualEffectView.Material
-    let blendingMode: NSVisualEffectView.BlendingMode
-
-    init(material: NSVisualEffectView.Material = .popover,
-         blendingMode: NSVisualEffectView.BlendingMode = .behindWindow) {
-        self.material = material
-        self.blendingMode = blendingMode
-    }
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = blendingMode
-        view.state = .active
-        view.isEmphasized = true
+/// 从 SwiftUI 内部清除 NSHostingView 的不透明背景
+/// 原理：在 SwiftUI 视图树中插入一个 NSView，通过它向上遍历父视图，
+/// 清除所有层的 backgroundColor，让底层的 NSVisualEffectView 透出来。
+struct TransparentHostingFix: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = TransparentFixView()
         return view
     }
 
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-        nsView.blendingMode = blendingMode
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // 每次 SwiftUI 更新时重新清除（因为 SwiftUI 可能重建子视图）
+        DispatchQueue.main.async {
+            (nsView as? TransparentFixView)?.clearParentBackgrounds()
+        }
+    }
+}
+
+private class TransparentFixView: NSView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // 加入窗口后清除所有父层背景
+        DispatchQueue.main.async { [weak self] in
+            self?.clearParentBackgrounds()
+        }
+    }
+
+    override func layout() {
+        super.layout()
+        clearParentBackgrounds()
+    }
+
+    func clearParentBackgrounds() {
+        var current: NSView? = self.superview
+        while let view = current {
+            view.wantsLayer = true
+            view.layer?.backgroundColor = .clear
+            view.layer?.isOpaque = false
+            current = view.superview
+        }
     }
 }

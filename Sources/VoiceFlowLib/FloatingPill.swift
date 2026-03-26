@@ -166,14 +166,19 @@ private struct PillContentView: View {
     @ObservedObject var viewModel: PillViewModel
 
     var body: some View {
-        VStack(spacing: 6) {
-            topRow
-            bottomRow
+        ZStack {
+            // 从内部清除 NSHostingView 不透明背景，让毛玻璃透出
+            TransparentHostingFix()
+                .frame(width: 0, height: 0)
+
+            VStack(spacing: 6) {
+                topRow
+                bottomRow
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // 跑马灯细边框（overlay 在内容区内，不会溢出被裁剪）
         .overlay(glowOverlay)
     }
 
