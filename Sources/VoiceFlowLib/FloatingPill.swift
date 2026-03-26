@@ -160,7 +160,7 @@ class FloatingPill {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
 
-        // 容器：连续曲线圆角（Apple 标志性 squircle）+ 深色外观
+        // 容器：连续曲线圆角 + 深色外观
         let container = NSView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: 80))
         container.wantsLayer = true
         container.layer?.cornerRadius = cornerRadius
@@ -168,7 +168,7 @@ class FloatingPill {
         container.layer?.masksToBounds = true
         container.appearance = NSAppearance(named: .vibrantDark)
 
-        // 毛玻璃：hudWindow 材质 — 深色半透明水晶感（类似 macOS 音量 HUD）
+        // 毛玻璃
         let blur = NSVisualEffectView(frame: container.bounds)
         blur.autoresizingMask = [.width, .height]
         blur.blendingMode = .behindWindow
@@ -293,7 +293,7 @@ private struct PillContentView: View {
     private var glowOverlay: some View {
         switch viewModel.state {
         case .recording:
-            GlowBorderView(color: .green, cornerRadius: cornerRadius, speed: 2.0)
+            GlowBorderView(color: .green, cornerRadius: cornerRadius, speed: 2.0, isRainbow: true)
         case .processing, .polishing:
             GlowBorderView(color: .blue, cornerRadius: cornerRadius, speed: 1.5)
         case .done:
