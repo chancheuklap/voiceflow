@@ -48,6 +48,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         // 启动时清理 7 天前的录音
         RecordingStore.cleanupOldRecordings()
 
+        // 在备忘录中创建今天的日记（如果还没有）
+        NotesIntegration.ensureTodayNote()
+
         if Permissions.didUpgrade() {
             print("Upgrade detected")
         }
