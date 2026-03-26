@@ -53,11 +53,11 @@ class Voiceflow < Formula
   end
 
   def post_install
-    # 链接 .app 到 /Applications
+    # 复制 .app 到 /Applications（非 symlink，避免启动台显示快捷方式箭头）
     app_src = prefix/"VoiceFlow.app"
     app_dst = Pathname("/Applications/VoiceFlow.app")
-    app_dst.unlink if app_dst.symlink?
-    app_dst.make_symlink(app_src) unless app_dst.exist?
+    rm_rf app_dst if app_dst.exist?
+    cp_r app_src, app_dst
   end
 
   def caveats
