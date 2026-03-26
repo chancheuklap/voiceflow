@@ -7,7 +7,7 @@ cask "voiceflow" do
   desc "macOS 菜单栏按键说话语音输入工具"
   homepage "https://github.com/chancheuklap/voiceflow"
 
-  app "Applications/VoiceFlow.app"
+  app "VoiceFlow.app"
 
   postflight do
     # 移除 Gatekeeper 隔离标记（未签名应用）
