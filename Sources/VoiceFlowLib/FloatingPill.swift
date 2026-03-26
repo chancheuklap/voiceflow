@@ -156,9 +156,10 @@ private struct PillContentView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        // 毛玻璃背景（全屏填充，圆角由 NSView container 裁剪）
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // 毛玻璃覆盖整个视图（包括 padding 外的区域，消灭白色边框）
         .background(.ultraThinMaterial)
-        // 跑马灯光晕边框
+        // 跑马灯光晕边框（用 strokeBorder 不溢出）
         .overlay(glowOverlay)
     }
 

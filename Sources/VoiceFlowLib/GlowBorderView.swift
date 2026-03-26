@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// 跑马灯光晕边框 — 彩色光点沿圆角矩形边缘旋转
+/// 跑马灯光晕边框 — 单个明亮光点沿圆角矩形边缘旋转
 struct GlowBorderView: View {
     let color: Color
     let cornerRadius: CGFloat
-    let speed: Double // 旋转一周的秒数
+    let speed: Double
 
     init(color: Color, cornerRadius: CGFloat = 16, speed: Double = 2.0) {
         self.color = color
@@ -15,54 +15,27 @@ struct GlowBorderView: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
-            let rotation = Angle.degrees((time / speed) * 360.0)
+            let rotation = Angle.degrees(fmod(time / speed * 360.0, 360.0))
 
-            ZStack {
-                // 外发光层（模糊的光晕）
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(lineWidth: 3)
-                    .fill(
-                        AngularGradient(
-                            colors: [
-                                color.opacity(0.9),
-                                color.opacity(0.5),
-                                color.opacity(0.1),
-                                .clear,
-                                .clear,
-                                .clear,
-                                .clear,
-                                color.opacity(0.1),
-                                color.opacity(0.5),
-                                color.opacity(0.9),
-                            ],
-                            center: .center,
-                            angle: rotation
-                        )
-                    )
-                    .blur(radius: 4)
-
-                // 锐利内边框层
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(lineWidth: 1.5)
-                    .fill(
-                        AngularGradient(
-                            colors: [
-                                color.opacity(0.8),
-                                color.opacity(0.4),
-                                color.opacity(0.05),
-                                .clear,
-                                .clear,
-                                .clear,
-                                .clear,
-                                color.opacity(0.05),
-                                color.opacity(0.4),
-                                color.opacity(0.8),
-                            ],
-                            center: .center,
-                            angle: rotation
-                        )
-                    )
-            }
+            // 单个亮点 + 大段透明 = 明显的跑马灯效果
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .strokeBorder(
+                    AngularGradient(
+                        stops: [
+                            .init(color: color.opacity(0.8), location: 0.0),
+                            .init(color: color.opacity(0.3), location: 0.08),
+                            .init(color: color.opacity(0.05), location: 0.15),
+                            .init(color: .clear, location: 0.25),
+                            .init(color: .clear, location: 0.75),
+                            .init(color: color.opacity(0.05), location: 0.85),
+                            .init(color: color.opacity(0.3), location: 0.92),
+                            .init(color: color.opacity(0.8), location: 1.0),
+                        ],
+                        center: .center,
+                        angle: rotation
+                    ),
+                    lineWidth: 2
+                )
         }
     }
 }
