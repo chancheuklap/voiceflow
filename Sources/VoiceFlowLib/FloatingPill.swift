@@ -1,18 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// 浮动状态胶囊 — Spokenly 风格磨砂玻璃弹窗
-/// 屏幕底部居中，不抢焦点，跨 Space，自动调整高度
+/// 浮动状态胶囊 — 简洁磨砂玻璃弹窗 + 细跑马灯边框
 class FloatingPill {
     private var panel: NSPanel?
     private var hostingView: NSHostingView<AnyView>?
-    private var glowHostingView: NSHostingView<AnyView>?
-    private var container: NSView?
     private var viewModel = PillViewModel()
     private var hideTimer: Timer?
 
     private let panelWidth: CGFloat = 280
-    private let glowPadding: CGFloat = 12 // 光晕向外扩展的距离
 
     init() {
         setupPanel()
@@ -32,7 +28,6 @@ class FloatingPill {
             panel?.orderFrontRegardless()
         }
         updatePanelSize()
-        updateGlow(for: state)
     }
 
     func updateText(_ text: String) {
@@ -47,14 +42,12 @@ class FloatingPill {
     func showDone(_ text: String, autoDismiss: TimeInterval = 1.5) {
         viewModel.state = .done(text)
         updatePanelSize()
-        updateGlow(for: .done(text))
         scheduleHide(after: autoDismiss)
     }
 
     func showError(_ message: String, autoDismiss: TimeInterval = 3.0) {
         viewModel.state = .error(message)
         updatePanelSize()
-        updateGlow(for: .error(message))
         scheduleHide(after: autoDismiss)
     }
 
@@ -70,26 +63,13 @@ class FloatingPill {
     // MARK: - Panel 创建
 
     private func setupPanel() {
-        let gp = glowPadding
-        let totalWidth = panelWidth + gp * 2
-        let contentHeight: CGFloat = 80
-        let totalHeight = contentHeight + gp * 2
-
-        // SwiftUI 内容（不含光晕，光晕单独一层）
         let contentView = PillContentView(viewModel: viewModel)
             .frame(width: panelWidth)
 
         let hosting = NSHostingView(rootView: AnyView(contentView))
-        hosting.frame = NSRect(x: gp, y: gp, width: panelWidth, height: contentHeight)
-
-        // 光晕层（SwiftUI GlowBorderView，不受 masksToBounds 裁剪）
-        let glowView = GlowContainerView(viewModel: viewModel)
-            .frame(width: panelWidth, height: contentHeight)
-        let glowHosting = NSHostingView(rootView: AnyView(glowView))
-        glowHosting.frame = NSRect(x: gp, y: gp, width: panelWidth, height: contentHeight)
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: totalWidth, height: totalHeight),
+            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: 80),
             styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
             defer: false
@@ -98,94 +78,68 @@ class FloatingPill {
         panel.level = .floating
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false // 阴影由光晕代替
+        panel.hasShadow = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
 
-        // 外层容器（不裁剪，让光晕溢出）
-        let outer = NSView(frame: NSRect(x: 0, y: 0, width: totalWidth, height: totalHeight))
-        outer.wantsLayer = true
-        outer.autoresizesSubviews = false
-
-        // 光晕层（在内容下面，不裁剪，向外扩散）
-        glowHosting.wantsLayer = true
-        glowHosting.layer?.backgroundColor = .clear
-        outer.addSubview(glowHosting)
-
-        // 内容容器（裁剪圆角，包含毛玻璃 + 文字）
-        let container = NSView(frame: NSRect(x: gp, y: gp, width: panelWidth, height: contentHeight))
+        // 容器：圆角裁剪
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: 80))
         container.wantsLayer = true
         container.layer?.cornerRadius = 16
         container.layer?.masksToBounds = true
 
+        // 毛玻璃（AppKit）
         let blur = NSVisualEffectView(frame: container.bounds)
         blur.autoresizingMask = [.width, .height]
         blur.blendingMode = .behindWindow
-        blur.material = .fullScreenUI
+        blur.material = .titlebar
         blur.state = .active
-        blur.isEmphasized = true
+        blur.appearance = NSAppearance(named: .vibrantLight)
         container.addSubview(blur)
 
-        hosting.frame = NSRect(x: 0, y: 0, width: panelWidth, height: contentHeight)
+        // SwiftUI 内容
+        hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]
         container.addSubview(hosting)
 
-        outer.addSubview(container)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            self.forceTransparent(hosting)
-            self.forceTransparent(glowHosting)
-        }
-
-        panel.contentView = outer
+        panel.contentView = container
         self.panel = panel
         self.hostingView = hosting
-        self.glowHostingView = glowHosting
-        self.container = container
+
+        // 清除 NSHostingView 不透明背景
+        clearHostingBackground()
     }
 
-    /// 递归清除 NSHostingView 及其子视图的不透明背景
+    private func clearHostingBackground() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let hosting = self?.hostingView else { return }
+            self?.forceTransparent(hosting)
+        }
+    }
+
     private func forceTransparent(_ view: NSView) {
         view.wantsLayer = true
         view.layer?.backgroundColor = .clear
         view.layer?.isOpaque = false
-        if let sv = view as? NSScrollView {
-            sv.drawsBackground = false
-        }
         for subview in view.subviews {
             forceTransparent(subview)
         }
     }
 
-    private func updateGlow(for state: PillState) {
-        // 光晕效果现在由 SwiftUI 的 GlowBorderView 处理
-        // 通过 viewModel.state 自动驱动
-    }
-
     private func updatePanelSize() {
         guard let hosting = hostingView, let panel = panel, let screen = NSScreen.main else { return }
 
-        let gp = glowPadding
         let fittingSize = hosting.fittingSize
-        let contentHeight = max(70, fittingSize.height)
-        let totalWidth = panelWidth + gp * 2
-        let totalHeight = contentHeight + gp * 2
+        let height = max(70, fittingSize.height)
 
         let screenFrame = screen.visibleFrame
-        let x = screenFrame.midX - totalWidth / 2
+        let x = screenFrame.midX - panelWidth / 2
         let y = screenFrame.origin.y + 60
 
-        panel.setFrame(NSRect(x: x, y: y, width: totalWidth, height: totalHeight), display: true)
+        panel.setFrame(NSRect(x: x, y: y, width: panelWidth, height: height), display: true)
+        panel.contentView?.frame = NSRect(x: 0, y: 0, width: panelWidth, height: height)
 
-        // 光晕层和内容层都需要更新位置
-        glowHostingView?.frame = NSRect(x: gp, y: gp, width: panelWidth, height: contentHeight)
-        container?.frame = NSRect(x: gp, y: gp, width: panelWidth, height: contentHeight)
-        hosting.frame = NSRect(x: 0, y: 0, width: panelWidth, height: contentHeight)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { [weak self] in
-            if let hosting = self?.hostingView { self?.forceTransparent(hosting) }
-            if let glow = self?.glowHostingView { self?.forceTransparent(glow) }
-        }
+        clearHostingBackground()
     }
 
     private func scheduleHide(after seconds: TimeInterval) {
@@ -196,7 +150,7 @@ class FloatingPill {
     }
 }
 
-// MARK: - SwiftUI ViewModel
+// MARK: - ViewModel
 
 private class PillViewModel: ObservableObject {
     @Published var state: PillState = .idle
@@ -206,7 +160,7 @@ private class PillViewModel: ObservableObject {
     @Published var appIcon: NSImage?
 }
 
-// MARK: - SwiftUI 内容视图
+// MARK: - SwiftUI 内容
 
 private struct PillContentView: View {
     @ObservedObject var viewModel: PillViewModel
@@ -219,7 +173,26 @@ private struct PillContentView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // 背景透明（毛玻璃由底层 AppKit NSVisualEffectView 提供）
+        // 跑马灯细边框（overlay 在内容区内，不会溢出被裁剪）
+        .overlay(glowOverlay)
+    }
+
+    @ViewBuilder
+    private var glowOverlay: some View {
+        switch viewModel.state {
+        case .recording:
+            GlowBorderView(color: .green, speed: 2.0)
+        case .processing, .polishing:
+            GlowBorderView(color: .blue, speed: 1.5)
+        case .done:
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(Color.green.opacity(0.4), lineWidth: 1)
+        case .error:
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(Color.red.opacity(0.4), lineWidth: 1)
+        case .idle:
+            EmptyView()
+        }
     }
 
     @ViewBuilder
@@ -319,31 +292,6 @@ private struct PillContentView: View {
             Text("VoiceFlow")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.primary.opacity(0.4))
-        }
-    }
-}
-
-// MARK: - 独立光晕容器（不被 masksToBounds 裁剪，光晕向外扩散）
-
-private struct GlowContainerView: View {
-    @ObservedObject var viewModel: PillViewModel
-
-    var body: some View {
-        ZStack {
-            switch viewModel.state {
-            case .recording:
-                GlowBorderView(color: .green, speed: 2.0)
-            case .processing, .polishing:
-                GlowBorderView(color: .blue, speed: 1.5)
-            case .done:
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.green.opacity(0.3), lineWidth: 1.5)
-            case .error:
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.red.opacity(0.4), lineWidth: 1.5)
-            case .idle:
-                EmptyView()
-            }
         }
     }
 }
