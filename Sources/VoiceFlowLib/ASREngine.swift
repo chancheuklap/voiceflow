@@ -4,7 +4,8 @@ import Foundation
 /// 设计参考 Voxt TranscriberProtocol，接口隔离 ASR 实现细节
 public protocol ASREngine: AnyObject {
     /// 建立连接（WebSocket 或初始化本地模型）
-    func connect() async throws
+    /// - Parameter terms: 用户词典词条，用于 ASR 引擎的自定义词汇偏置
+    func connect(terms: [String]) async throws
     /// 发送一段音频数据（PCM 16-bit, 16kHz, mono）
     func sendAudio(_ data: Data) async throws
     /// 通知 ASR 引擎音频输入结束

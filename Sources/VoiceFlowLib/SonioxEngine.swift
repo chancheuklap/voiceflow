@@ -19,7 +19,9 @@ public class SonioxEngine: ASREngine {
         self.apiKey = apiKey
     }
 
-    public func connect() async throws {
+    /// 连接 Soniox 并开始识别
+    /// - Parameter terms: 用户词典词条，传入 context.terms 让 ASR 优先匹配这些词
+    public func connect(terms: [String] = []) async throws {
         finalTokens = []
         isFinished = false
 
@@ -29,7 +31,7 @@ public class SonioxEngine: ASREngine {
         webSocketTask?.resume()
 
         // 发送配置消息（必须是第一条消息）
-        let config: [String: Any] = [
+        var config: [String: Any] = [
             "api_key": apiKey,
             "model": "stt-rt-v4",
             "audio_format": "pcm_s16le",
@@ -37,6 +39,11 @@ public class SonioxEngine: ASREngine {
             "num_channels": 1,
             "language_hints": ["zh", "en"],
         ]
+
+        // 用户词典 → Soniox context.terms（ASR 阶段就优先匹配）
+        if !terms.isEmpty {
+            config["context"] = ["terms": terms]
+        }
 
         let configData = try JSONSerialization.data(withJSONObject: config)
         let configString = String(data: configData, encoding: .utf8)!

@@ -192,7 +192,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         // 发送保存的音频数据
         Task {
             do {
-                try await engine.connect()
+                let terms = PresetManager.loadDictionary()
+                try await engine.connect(terms: terms)
                 // 分块发送（每次 3200 bytes = 100ms @16kHz mono s16le）
                 let chunkSize = 3200
                 var offset = 0
@@ -413,7 +414,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task {
             do {
-                try await engine.connect()
+                let terms = PresetManager.loadDictionary()
+                try await engine.connect(terms: terms)
 
                 // 连接成功后设置 callback，缓冲区中的音频会自动发送
                 self.recorder.streamingCallback = { [weak engine] data in

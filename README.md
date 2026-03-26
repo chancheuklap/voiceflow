@@ -1,130 +1,107 @@
-<p align="center">
-  <img src="logo.svg" width="80" alt="open-wispr logo">
-</p>
+# VoiceFlow
 
-<h1 align="center">open-wispr</h1>
+macOS 菜单栏按键说话语音输入工具。按住快捷键说话，松开后文字出现在光标处。
 
-<p align="center">
-  <strong><a href="https://open-wispr.com">open-wispr.com</a></strong><br>
-  Local, private voice dictation for macOS. Hold a key, speak, release — your words appear at the cursor.<br>
-  Everything runs on-device. No audio or text ever leaves your machine.
-</p>
+使用 Soniox 云端实时语音识别（ASR），可选火山引擎/豆包大模型对转录结果进行润色（语法纠正、口语过滤等）。支持日记模式——录音内容自动追加到 Apple 备忘录的每日日记中。
 
-<p align="center">Powered by <a href="https://github.com/ggml-org/whisper.cpp">whisper.cpp</a> with Metal acceleration on Apple Silicon.</p>
+> 本项目 fork 自 [open-wispr](https://github.com/human37/open-wispr)，已完全分化：Whisper 替换为 Soniox 云端 ASR，新增 LLM 后处理管线和日记模式。
 
-## Install
+## 安装
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/human37/open-wispr/main/scripts/install.sh | bash
-```
+### 前置条件
 
-The script handles everything: installs via Homebrew, walks you through granting permissions, downloads the Whisper model, and starts the service. You'll see live feedback as each step completes.
+- macOS 13+（Apple Silicon）
+- [Soniox API 密钥](https://soniox.com)（必需）
+- 火山引擎/豆包 API 密钥（可选，用于 LLM 润色）
 
-A waveform icon appears in your menu bar when it's running.
-
-The default hotkey is the **Globe key** (🌐, bottom-left). Hold it, speak, release.
-
-> **[Full installation guide](docs/install-guide.md)** — permissions walkthrough with screenshots, non-English macOS instructions, and troubleshooting.
-
-## Uninstall
+### 从源码构建
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/human37/open-wispr/main/scripts/uninstall.sh | bash
+git clone <repo-url>
+cd voiceflow
+swift build -c release
+.build/release/VoiceFlow start
 ```
 
-This stops the service, removes the formula, tap, config, models, app bundle, logs, and permissions.
+### 权限要求
 
-## Configuration
+- **麦克风权限** — 录音需要
+- **辅助功能权限** — 文本插入需要（CGEvent 模拟 Cmd+V）
 
-Edit `~/.config/open-wispr/config.json`:
+如果 Globe 键会打开表情选择器：**系统设置 → 键盘 → "按下🌐键时" → "不执行任何操作"**
+
+## 使用方式
+
+默认按住 **Globe 键**（🌐，键盘左下角）说话，松开后文字插入光标位置。
+
+```bash
+voiceflow              # 启动（默认）
+voiceflow status       # 查看当前配置
+voiceflow --help       # 帮助信息
+```
+
+开发模式：
+
+```bash
+./dev.sh               # 编译 + 重启调试版本
+```
+
+## 配置
+
+编辑 `~/.config/voiceflow/config.json`：
 
 ```json
 {
   "hotkey": { "keyCode": 63, "modifiers": [] },
-  "modelSize": "base.en",
-  "language": "en",
-  "spokenPunctuation": false,
-  "maxRecordings": 0,
+  "sonioxApiKey": "your-soniox-key",
+  "llmApiKey": "your-volcengine-key",
+  "llmModel": "doubao-1.5-pro-32k",
+  "enabledSkills": ["grammar", "filter"],
   "toggleMode": false
 }
 ```
 
-Then restart: `brew services restart open-wispr`
+| 选项 | 默认值 | 说明 |
+|------|--------|------|
+| **hotkey** | Globe 键 (`63`) | 任意按键码，可配合 `modifiers`（`"cmd"`/`"ctrl"`/`"shift"`/`"opt"`） |
+| **sonioxApiKey** | 无 | Soniox API 密钥（必填） |
+| **llmApiKey** | 无 | 火山引擎 API 密钥（可选，不填则跳过 LLM 润色） |
+| **llmModel** | `doubao-1.5-pro-32k` | LLM 模型名称 |
+| **enabledSkills** | `["grammar", "filter"]` | 启用的 LLM 技能组合 |
+| **toggleMode** | `false` | `true` = 点按切换录音；`false` = 按住说话 |
+| **journalHotkey** | 无 | 日记模式快捷键，录音内容保存到备忘录而非插入光标 |
 
-| Option | Default | Values |
-|---|---|---|
-| **hotkey** | `63` | Globe (`63`), Right Option (`61`), F5 (`96`), or any key code |
-| **modifiers** | `[]` | `"cmd"`, `"ctrl"`, `"shift"`, `"opt"` — combine for chords |
-| **modelSize** | `"base.en"` | See model table below |
-| **language** | `"en"` | `"auto"` for auto-detect, or any [ISO 639-1 code](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) — e.g. `it`, `fr`, `de`, `es` |
-| **spokenPunctuation** | `false` | Say "comma", "period", etc. to insert punctuation instead of auto-punctuation |
-| **maxRecordings** | `0` | Optionally store past recordings locally as `.wav` files for re-transcribing from the tray menu. `0` = nothing stored (default). Set 1-100 to keep that many recent recordings. |
-| **toggleMode** | `false` | Press hotkey once to start recording, press again to stop. Default is hold-to-talk. |
+### LLM 技能
 
-### Models
+多个技能可同时启用，提示词会自动合并为单次 API 调用。
 
-Larger models are more accurate but slower and use more memory. The default `base.en` is a good balance for most users.
+| 技能 ID | 功能 |
+|---------|------|
+| `grammar` | 语法纠正 |
+| `filter` | 口语填充词过滤 |
+| `structure` | 自动分段结构化 |
+| `formal` | 正式化表达 |
+| `simplify` | 简化表达 |
 
-| Model | Size | Speed | Accuracy | Best for |
-|---|---|---|---|---|
-| `tiny.en` | 75 MB | Fastest | Lower | Quick notes, short phrases |
-| **`base.en`** | 142 MB | **Fast** | **Good** | **Most users (default)** |
-| `small.en` | 466 MB | Moderate | Better | Longer dictation, technical terms |
-| `medium.en` | 1.5 GB | Slower | Great | Maximum accuracy, complex speech |
-| `large-v3-turbo` | 1.6 GB | Moderate | Great | Fast multilingual, near-large accuracy |
-| `large` | 3 GB | Slowest | Best | Multilingual, highest accuracy (M1 Pro+ recommended) |
+### 附加文件
 
-> **Non-English languages:** Models ending in `.en` are English-only. To use another language, switch to the equivalent model without the `.en` suffix (e.g. `base.en` → `base`) and set the `language` field to your language code. Multilingual models are slightly less accurate for English but support 99 languages.
+- `~/.config/voiceflow/dictionary.txt` — 专有名词词典（每行一个），注入 LLM 提示词纠正 ASR 错误
+- `~/.config/voiceflow/preference.txt` — 个人偏好（自由文本），追加到 LLM 提示词
+- `~/.config/voiceflow/recordings/` — 录音 WAV 文件，超过 7 天自动清理
 
-If the Globe key opens the emoji picker: **System Settings → Keyboard → "Press 🌐 key to" → "Do Nothing"**
+## 菜单栏状态
 
-## Menu bar
+| 状态 | 图标 |
+|------|------|
+| 待机 | 波形轮廓 |
+| 录音中 | 跳动波形 |
+| 转录中 | 跳动圆点 |
+| 等待权限 | 锁 |
 
-Click the waveform icon for status and options. **Recent Recordings** lists your last recordings; click one to re-transcribe and copy the result to the clipboard.
+## 开机自启
 
-| State | Icon |
-|---|---|
-| Idle | Waveform outline |
-| Recording | Bouncing waveform |
-| Transcribing | Wave dots |
-| Downloading model | Progress ring |
-| Waiting for permission | Lock |
+通过菜单栏选项启用，管理方式为 LaunchAgents plist（`~/Library/LaunchAgents/com.voiceflow.app.plist`）。
 
-Click the menu bar icon to access **Copy Last Dictation** — recovers your most recent transcription if you dictated without a text field focused.
-
-## Compare
-
-| | open-wispr | VoiceInk | Wispr Flow | Superwhisper | Apple Dictation |
-|---|---|---|---|---|---|
-| **Price** | **Free** | $39.99 | $15/mo | $8.49/mo | Free |
-| **Open source** | MIT | GPLv3 | No | No | No |
-| **100% on-device** | Yes | Yes | No | Yes | Partial |
-| **Push-to-talk** | Yes | Yes | Yes | Yes | No |
-| **AI features** | No | AI assistant | AI rewriting | AI formatting | No |
-| **Account required** | No | No | Yes | Yes | Apple ID |
-
-## Privacy
-
-open-wispr is completely local. Audio is recorded to a temp file, transcribed by whisper.cpp on your CPU/GPU, and the temp file is deleted. No network requests are made except to download the Whisper model on first run. Optionally, you can configure open-wispr to store a number of past recordings locally via the `maxRecordings` setting. Those recordings stay private and on your machine, and we default to not storing anything.
-
-## Roadmap
-
-See what's planned and in progress on the [public roadmap](https://github.com/users/human37/projects/2). Feature requests and ideas are welcome as [issues](https://github.com/human37/open-wispr/issues).
-
-## Build from source
-
-```bash
-git clone https://github.com/human37/open-wispr.git
-cd open-wispr
-brew install whisper-cpp
-swift build -c release
-.build/release/open-wispr start
-```
-
-## Support
-
-open-wispr is free and always will be. If you find it useful, you can [leave a tip](https://buy.stripe.com/4gM5kC2AU0Ssd4l6Hqd7q00).
-
-## License
+## 许可证
 
 MIT
