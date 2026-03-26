@@ -7,6 +7,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     var inserter: TextInserter!
     var config: Config!
     var asrEngine: SonioxEngine?
+    var llmProvider: LLMProvider?
+    var asyncReplacer: AsyncReplacer!
     var floatingPill: FloatingPill!
     var soundFeedback: SoundFeedback!
     var levelTimer: Timer?
@@ -20,6 +22,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         inserter = TextInserter()
         floatingPill = FloatingPill()
         soundFeedback = SoundFeedback()
+        asyncReplacer = AsyncReplacer(inserter: inserter)
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.setup()
@@ -66,6 +69,17 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             print("Soniox: API key configured")
         } else {
             print("Warning: Soniox API Key not set. Edit ~/.config/voiceflow/config.json")
+        }
+
+        // 初始化 LLM
+        if let key = config.llmApiKey, !key.isEmpty,
+           let baseURL = config.llmBaseURL, !baseURL.isEmpty,
+           let model = config.llmModel, !model.isEmpty {
+            llmProvider = VolcengineLLM(apiKey: key, baseURL: baseURL, model: model)
+            let presetName = PresetManager.find(id: config.activePreset)?.name ?? "无"
+            print("LLM: configured (\(model), preset: \(presetName))")
+        } else {
+            print("LLM: not configured (ASR text will be used as-is)")
         }
 
         DispatchQueue.main.async { [weak self] in
@@ -116,6 +130,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             onKeyDown: { [weak self] in self?.handleKeyDown() },
             onKeyUp: { [weak self] in self?.handleKeyUp() }
         )
+
+        // 重新初始化 LLM
+        if let key = config.llmApiKey, !key.isEmpty,
+           let baseURL = config.llmBaseURL, !baseURL.isEmpty,
+           let model = config.llmModel, !model.isEmpty {
+            llmProvider = VolcengineLLM(apiKey: key, baseURL: baseURL, model: model)
+        } else {
+            llmProvider = nil
+        }
 
         statusBar.buildMenu()
         let hotkeyDesc = KeyCodes.describe(keyCode: config.hotkey.keyCode, modifiers: config.hotkey.modifiers)
@@ -197,14 +220,31 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
             if !text.isEmpty {
                 self.lastTranscription = text
-                self.inserter.insert(text: text)
-                self.floatingPill.showDone(text)
+                let preset = PresetManager.find(id: self.config.activePreset)
+
+                self.asyncReplacer.insertAndPolish(
+                    asrText: text,
+                    llmProvider: self.llmProvider,
+                    preset: preset,
+                    onPolishStart: {
+                        self.floatingPill.show(state: .polishing)
+                    },
+                    onComplete: { finalText, wasPolished in
+                        self.lastTranscription = finalText
+                        if wasPolished {
+                            self.floatingPill.showDone("已润色 (Cmd+V 粘贴)")
+                        } else {
+                            self.floatingPill.showDone(finalText)
+                        }
+                        self.statusBar.state = .idle
+                        self.statusBar.buildMenu()
+                    }
+                )
             } else {
                 self.floatingPill.hide()
+                self.statusBar.state = .idle
+                self.statusBar.buildMenu()
             }
-
-            self.statusBar.state = .idle
-            self.statusBar.buildMenu()
 
             Task {
                 try? await self.asrEngine?.close()
