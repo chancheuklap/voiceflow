@@ -26,7 +26,7 @@ public struct Config: Codable {
         sonioxApiKey: nil,
         llmApiKey: nil,
         llmBaseURL: "https://ark.cn-beijing.volces.com/api/v3",
-        llmModel: "doubao-1.5-pro-32k",
+        llmModel: "doubao-seed-2-0-lite-260215",
         enabledSkills: ["grammar", "filter"],
         startSound: FlexBool(true),
         stopSound: FlexBool(true)

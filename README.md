@@ -63,7 +63,7 @@ nano ~/.config/voiceflow/config.json
 {
   "sonioxApiKey": "你的 Soniox 密钥",
   "llmApiKey": "你的火山引擎密钥（可选）",
-  "llmModel": "doubao-1.5-pro-32k",
+  "llmModel": "doubao-seed-2-0-lite-260215",
   "enabledSkills": ["grammar", "filter"]
 }
 ```
@@ -119,7 +119,7 @@ nano ~/.config/voiceflow/config.json
 |------|--------|------|
 | `sonioxApiKey` | 无 | Soniox API 密钥（**必填**） |
 | `llmApiKey` | 无 | 火山引擎 API 密钥（不填则跳过润色） |
-| `llmModel` | `doubao-1.5-pro-32k` | LLM 模型名称 |
+| `llmModel` | `doubao-seed-2-0-lite-260215` | LLM 模型名称 |
 | `hotkey` | Globe 键 | 录音快捷键 |
 | `toggleMode` | `false` | `true` = 点按切换录音，`false` = 按住说话 |
 | `journalHotkey` | 无 | 日记模式快捷键 |
