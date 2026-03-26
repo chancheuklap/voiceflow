@@ -1,12 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// 浮动状态胶囊 — 简洁磨砂玻璃弹窗 + 细跑马灯边框
+/// 浮动状态胶囊 — 磨砂玻璃 + 跑马灯边框
 class FloatingPill {
     private var panel: NSPanel?
     private var hostingView: NSHostingView<AnyView>?
     private var viewModel = PillViewModel()
     private var hideTimer: Timer?
+    private var isHiding = false
 
     private let panelWidth: CGFloat = 280
 
@@ -17,6 +18,10 @@ class FloatingPill {
     // MARK: - 公开接口
 
     func show(state: PillState) {
+        hideTimer?.invalidate()
+        hideTimer = nil
+        cancelHideIfNeeded()
+
         viewModel.state = state
 
         if let frontApp = NSWorkspace.shared.frontmostApplication {
@@ -40,13 +45,25 @@ class FloatingPill {
     }
 
     func showDone(_ text: String, autoDismiss: TimeInterval = 1.5) {
+        hideTimer?.invalidate()
+        hideTimer = nil
+        cancelHideIfNeeded()
         viewModel.state = .done(text)
+        if panel?.isVisible != true {
+            panel?.orderFrontRegardless()
+        }
         updatePanelSize()
         scheduleHide(after: autoDismiss)
     }
 
     func showError(_ message: String, autoDismiss: TimeInterval = 3.0) {
+        hideTimer?.invalidate()
+        hideTimer = nil
+        cancelHideIfNeeded()
         viewModel.state = .error(message)
+        if panel?.isVisible != true {
+            panel?.orderFrontRegardless()
+        }
         updatePanelSize()
         scheduleHide(after: autoDismiss)
     }
@@ -58,9 +75,18 @@ class FloatingPill {
         viewModel.state = .idle
         viewModel.currentText = ""
         viewModel.audioLevel = 0
+        isHiding = false
     }
 
-    // MARK: - Panel 创建
+    // MARK: - 内部
+
+    private func cancelHideIfNeeded() {
+        // 取消定时器驱动的延迟隐藏
+        hideTimer?.invalidate()
+        hideTimer = nil
+    }
+
+    // MARK: - Panel 创建（完全复用 commit 2087078 的确认可用架构）
 
     private func setupPanel() {
         let contentView = PillContentView(viewModel: viewModel)
@@ -88,7 +114,7 @@ class FloatingPill {
         container.layer?.cornerRadius = 16
         container.layer?.masksToBounds = true
 
-        // 毛玻璃（AppKit）
+        // 毛玻璃（AppKit 原生，这个组合确认可用）
         let blur = NSVisualEffectView(frame: container.bounds)
         blur.autoresizingMask = [.width, .height]
         blur.blendingMode = .behindWindow
@@ -167,7 +193,7 @@ private struct PillContentView: View {
 
     var body: some View {
         ZStack {
-            // 从内部清除 NSHostingView 不透明背景，让毛玻璃透出
+            // 清除 NSHostingView 不透明背景
             TransparentHostingFix()
                 .frame(width: 0, height: 0)
 
