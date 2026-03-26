@@ -104,6 +104,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         isReady = true
         statusBar.state = .idle
+        statusBar.onConfigChange = { [weak self] config in
+            self?.applyConfigChange(config)
+        }
         statusBar.buildMenu()
 
         let hotkeyDesc = KeyCodes.describe(keyCode: config.hotkey.keyCode, modifiers: config.hotkey.modifiers)
@@ -219,7 +222,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         engine.onComplete = { [weak self] text in
             guard let self = self else { return }
-
             if !text.isEmpty {
                 self.lastTranscription = text
 
@@ -237,7 +239,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     },
                     onComplete: { finalText, wasPolished in
                         self.lastTranscription = finalText
-                        self.floatingPill.showDone(finalText)
+                        self.floatingPill.hide()
                         self.statusBar.state = .idle
                         self.statusBar.buildMenu()
                     }

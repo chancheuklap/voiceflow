@@ -172,9 +172,14 @@ public class SonioxEngine: ASREngine {
 
         // 检查是否完成
         if json["finished"] as? Bool == true {
+            guard !isFinished else {
+                print("[SonioxEngine] ⚠️ finished=true received AGAIN, ignoring (防止双重回调)")
+                return
+            }
             isFinished = true
             receiveTask?.cancel()
             let completeText = finalTokens.joined()
+            print("[SonioxEngine] finished, total text length=\(completeText.count)")
             DispatchQueue.main.async { [weak self] in
                 self?.onComplete?(completeText)
             }

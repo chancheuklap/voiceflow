@@ -52,6 +52,7 @@ class StatusBarController: NSObject {
 
         let config = Config.load()
         let hotkeyDesc = KeyCodes.describe(keyCode: config.hotkey.keyCode, modifiers: config.hotkey.modifiers)
+        let enabledSkills = config.effectiveSkills
 
         let menu = NSMenu()
 
@@ -84,6 +85,37 @@ class StatusBarController: NSObject {
             menu.addItem(stateItem)
         }
 
+        // ── Skills 区域 ──
+
+        menu.addItem(NSMenuItem.separator())
+
+        let skillsHeader = NSMenuItem(title: "文本处理", action: nil, keyEquivalent: "")
+        skillsHeader.isEnabled = false
+        menu.addItem(skillsHeader)
+
+        for preset in PresetManager.presets {
+            let isEnabled = enabledSkills.contains(preset.id)
+            let skillTarget = MenuItemTarget { [weak self] in
+                var cfg = Config.load()
+                var skills = cfg.effectiveSkills
+                if let index = skills.firstIndex(of: preset.id) {
+                    skills.remove(at: index)
+                } else {
+                    skills.append(preset.id)
+                }
+                cfg.enabledSkills = skills
+                try? cfg.save()
+                self?.onConfigChange?(cfg)
+            }
+            menuItemTargets.append(skillTarget)
+            let skillItem = NSMenuItem(title: "  \(preset.name)", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+            skillItem.target = skillTarget
+            skillItem.state = isEnabled ? .on : .off
+            menu.addItem(skillItem)
+        }
+
+        // ── 模式设置 ──
+
         menu.addItem(NSMenuItem.separator())
 
         let toggleTarget = MenuItemTarget { [weak self] in
@@ -99,6 +131,8 @@ class StatusBarController: NSObject {
         toggleItem.state = (config.toggleMode?.value ?? false) ? .on : .off
         menu.addItem(toggleItem)
 
+        // ── 工具 ──
+
         menu.addItem(NSMenuItem.separator())
 
         let lastText = (NSApplication.shared.delegate as? AppDelegate)?.lastTranscription
@@ -106,6 +140,16 @@ class StatusBarController: NSObject {
         copyItem.target = self
         if lastText == nil { copyItem.isEnabled = false }
         menu.addItem(copyItem)
+
+        let dictTarget = MenuItemTarget {
+            StatusBarController.openDictionary()
+        }
+        menuItemTargets.append(dictTarget)
+        let dictItem = NSMenuItem(title: "Edit Dictionary...", action: #selector(MenuItemTarget.invoke), keyEquivalent: "d")
+        dictItem.target = dictTarget
+        menu.addItem(dictItem)
+
+        // ── 配置 ──
 
         menu.addItem(NSMenuItem.separator())
 
@@ -135,6 +179,27 @@ class StatusBarController: NSObject {
             try? config.save()
         }
         NSWorkspace.shared.open(configFile)
+    }
+
+    /// 打开用户词典文件（不存在时创建模板）
+    static func openDictionary() {
+        let dictFile = Config.configDir.appendingPathComponent("dictionary.txt")
+        if !FileManager.default.fileExists(atPath: dictFile.path) {
+            let template = """
+            # VoiceFlow 用户词典
+            # 每行一个词语，ASR 识别时会优先匹配这些词
+            # 以 # 开头的行为注释
+            #
+            # 示例：
+            # Claude
+            # VoiceFlow
+            # GPT-4
+
+            """
+            try? FileManager.default.createDirectory(at: Config.configDir, withIntermediateDirectories: true)
+            try? template.write(to: dictFile, atomically: true, encoding: .utf8)
+        }
+        NSWorkspace.shared.open(dictFile)
     }
 
     private func updateIcon() {
