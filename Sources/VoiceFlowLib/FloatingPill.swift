@@ -174,7 +174,7 @@ class FloatingPill {
         blur.blendingMode = .behindWindow
         blur.material = .hudWindow
         blur.state = .active
-        blur.alphaValue = 0.82
+        blur.alphaValue = 0.88
         container.addSubview(blur)
 
         // SwiftUI 内容层
@@ -316,8 +316,8 @@ private struct PillContentView: View {
                     .transition(.opacity)
             } else {
                 Text(viewModel.currentText)
-                    .font(.system(size: 13))
-                    .foregroundColor(.primary.opacity(0.8))
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.primary.opacity(0.85))
                     .lineLimit(5)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -327,11 +327,10 @@ private struct PillContentView: View {
         case .processing:
             HStack {
                 Text("识别中")
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundColor(.primary.opacity(0.6))
                 Spacer()
-                ProgressView()
-                    .controlSize(.small)
+                PulsingDotsView()
             }
             .transition(.asymmetric(
                 insertion: .opacity.combined(with: .scale(scale: 0.95)),
@@ -341,11 +340,10 @@ private struct PillContentView: View {
         case .polishing:
             HStack {
                 Text("润色中")
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundColor(.primary.opacity(0.6))
                 Spacer()
-                ProgressView()
-                    .controlSize(.small)
+                PulsingDotsView()
             }
             .transition(.asymmetric(
                 insertion: .opacity.combined(with: .scale(scale: 0.95)),
@@ -356,10 +354,10 @@ private struct PillContentView: View {
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
-                    .font(.system(size: 14))
+                    .font(.system(size: 14, design: .rounded))
                 Text(text)
-                    .font(.system(size: 13))
-                    .foregroundColor(.primary.opacity(0.8))
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.primary.opacity(0.85))
                     .lineLimit(4)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -373,10 +371,10 @@ private struct PillContentView: View {
             HStack(spacing: 6) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.red)
-                    .font(.system(size: 14))
+                    .font(.system(size: 14, design: .rounded))
                 Text(msg)
-                    .font(.system(size: 13))
-                    .foregroundColor(.primary.opacity(0.8))
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.primary.opacity(0.85))
                     .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -415,14 +413,38 @@ private struct PillContentView: View {
                         .cornerRadius(4)
                 }
                 Text(viewModel.appName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary.opacity(0.8))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundColor(.primary.opacity(0.85))
                     .lineLimit(1)
             }
             Spacer()
             Text("VoiceFlow")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundColor(.primary.opacity(0.4))
+        }
+    }
+}
+
+// MARK: - 三点脉冲加载指示器（类似 iMessage 输入动画）
+
+private struct PulsingDotsView: View {
+    @State private var activeIndex = 0
+    private let dotCount = 3
+    private let dotSize: CGFloat = 4
+    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<dotCount, id: \.self) { index in
+                Circle()
+                    .fill(Color.primary.opacity(index == activeIndex ? 0.8 : 0.3))
+                    .frame(width: dotSize, height: dotSize)
+                    .scaleEffect(index == activeIndex ? 1.3 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: activeIndex)
+            }
+        }
+        .onReceive(timer) { _ in
+            activeIndex = (activeIndex + 1) % dotCount
         }
     }
 }
