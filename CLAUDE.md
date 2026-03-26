@@ -6,7 +6,7 @@
 
 VoiceFlow 是一个 macOS 菜单栏常驻的按键说话（Push-to-Talk）语音输入工具。通过 WebSocket 将音频实时流式传输至 Soniox 云端语音识别（ASR），可选用火山引擎/豆包大模型（LLM）对转录文本进行润色，最终将文本插入光标位置，或追加到 Apple 备忘录的每日日记中。
 
-本项目 fork 自 open-wispr 但已完全分化：Whisper 替换为 Soniox，新增 LLM 后处理管线和日记模式。README 仍描述上游项目，内容已过时。
+本项目 fork 自 open-wispr 但已完全分化：Whisper 替换为 Soniox，新增 LLM 后处理管线和日记模式。
 
 ## 构建与开发命令
 
@@ -41,7 +41,7 @@ AppDelegate.handleRecordingStart()
   ├─ AudioRecorder.startStreaming()        ← AVAudioEngine tap, float32→int16, 16kHz 单声道
   │    └─ startupBuffer（WebSocket 连接前暂存音频）
   └─ SonioxEngine.connect()               ← wss://stt-rt.soniox.com, 模型 stt-rt-v4
-       └─ 连接成功后刷入 startupBuffer
+       └─ 连接成功后 AppDelegate 设置 streamingCallback → AudioRecorder 排空 startupBuffer
 
 AudioRecorder tap → streamingCallback → SonioxEngine.sendAudio()  [实时流式]
 
