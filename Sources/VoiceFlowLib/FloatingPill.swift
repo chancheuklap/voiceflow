@@ -160,19 +160,21 @@ class FloatingPill {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
 
-        // 容器：连续曲线圆角（Apple 标志性 squircle）
+        // 容器：连续曲线圆角（Apple 标志性 squircle）+ 深色外观
         let container = NSView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: 80))
         container.wantsLayer = true
         container.layer?.cornerRadius = cornerRadius
         container.layer?.cornerCurve = .continuous
         container.layer?.masksToBounds = true
+        container.appearance = NSAppearance(named: .vibrantDark)
 
-        // 毛玻璃：popover 材质 + 自适应系统亮暗色
+        // 毛玻璃：hudWindow 材质 — 深色半透明水晶感（类似 macOS 音量 HUD）
         let blur = NSVisualEffectView(frame: container.bounds)
         blur.autoresizingMask = [.width, .height]
         blur.blendingMode = .behindWindow
-        blur.material = .popover
+        blur.material = .hudWindow
         blur.state = .active
+        blur.alphaValue = 0.82
         container.addSubview(blur)
 
         // SwiftUI 内容层
@@ -276,9 +278,9 @@ private struct PillContentView: View {
             .strokeBorder(
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.35),
-                        Color.white.opacity(0.12),
-                        Color.white.opacity(0.05)
+                        Color.white.opacity(0.5),
+                        Color.white.opacity(0.2),
+                        Color.white.opacity(0.08)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
