@@ -51,7 +51,8 @@ struct RecordingStore {
     /// 从 WAV 文件中提取 PCM 数据（跳过 44 字节头）
     static func loadPCM(from url: URL) -> Data? {
         guard let data = try? Data(contentsOf: url), data.count > 44 else { return nil }
-        return data.dropFirst(44)
+        // Data() 重建确保 startIndex=0，避免 slice 下标越界
+        return Data(data.dropFirst(44))
     }
 
     // MARK: - WAV 文件构建
