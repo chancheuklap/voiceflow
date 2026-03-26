@@ -161,11 +161,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         isPressed = true
         statusBar.state = .recording
 
-        // 清理上一次的引擎（防止重复使用时连接残留）
+        // 清理上一次的引擎和状态（防止快速连按时冲突）
         if let oldEngine = asrEngine {
             asrEngine = nil
             Task { try? await oldEngine.close() }
         }
+        recorder.stopStreaming()
+        recorder.streamingCallback = nil
+        stopLevelTimer()
+        floatingPill.hide() // 强制关闭之前的弹窗（包括取消 hideTimer）
 
         // 提示音 + 弹窗
         if config.startSound?.value ?? true {
