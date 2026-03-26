@@ -3,6 +3,9 @@ import AppKit
 public class AppDelegate: NSObject, NSApplicationDelegate {
     var statusBar: StatusBarController!
     var hotkeyManager: HotkeyManager?
+    var journalHotkeyManager: HotkeyManager?
+    /// 当前是否处于日记模式（录音结果保存到备忘录而非插入光标）
+    var isJournalMode = false
     var recorder: AudioRecorder!
     var inserter: TextInserter!
     var config: Config!
@@ -15,6 +18,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     var isPressed = false
     var isReady = false
     public var lastTranscription: String?
+    /// 上一次录音的本地文件路径（用于重试）
+    public var lastRecordingURL: URL?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         statusBar = StatusBarController()
@@ -39,6 +44,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupInner() throws {
         config = Config.load()
+
+        // 启动时清理 7 天前的录音
+        RecordingStore.cleanupOldRecordings()
 
         if Permissions.didUpgrade() {
             print("Upgrade detected")
@@ -102,6 +110,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
+        // 注册日记模式快捷键
+        setupJournalHotkey()
+
         isReady = true
         statusBar.state = .idle
         statusBar.onConfigChange = { [weak self] config in
@@ -112,7 +123,113 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let hotkeyDesc = KeyCodes.describe(keyCode: config.hotkey.keyCode, modifiers: config.hotkey.modifiers)
         print("VoiceFlow v\(VoiceFlow.version)")
         print("Hotkey: \(hotkeyDesc)")
+        if let jh = config.journalHotkey {
+            let jhDesc = KeyCodes.describe(keyCode: jh.keyCode, modifiers: jh.modifiers)
+            print("Journal hotkey: \(jhDesc)")
+        }
         print("Ready.")
+    }
+
+    /// 重新识别上一次的录音
+    public func retryLastRecording() {
+        guard let url = lastRecordingURL,
+              let pcmData = RecordingStore.loadPCM(from: url),
+              let apiKey = config.sonioxApiKey, !apiKey.isEmpty else {
+            floatingPill.showError("无可重试的录音")
+            soundFeedback.playError()
+            return
+        }
+
+        print("Retrying recording: \(url.lastPathComponent)")
+        floatingPill.show(state: .processing)
+        statusBar.state = .transcribing
+
+        let engine = SonioxEngine(apiKey: apiKey)
+
+        engine.onInterimText = { [weak self] text in
+            self?.floatingPill.updateText(text)
+        }
+        engine.onFinalText = { _ in }
+
+        engine.onComplete = { [weak self] text in
+            guard let self = self else { return }
+            if !text.isEmpty {
+                self.lastTranscription = text
+                let preset = PresetManager.buildCombinedPreset(
+                    enabledSkillIds: self.config.effectiveSkills
+                )
+                self.asyncReplacer.processAndInsert(
+                    asrText: text,
+                    llmProvider: self.llmProvider,
+                    preset: preset,
+                    onPolishStart: { self.floatingPill.show(state: .polishing) },
+                    onComplete: { finalText, _ in
+                        self.lastTranscription = finalText
+                        self.floatingPill.hide()
+                        self.statusBar.state = .idle
+                        self.statusBar.buildMenu()
+                    }
+                )
+            } else {
+                self.floatingPill.showError("重试未识别到内容")
+                self.statusBar.state = .idle
+                self.statusBar.buildMenu()
+            }
+            Task { try? await engine.close() }
+        }
+
+        engine.onError = { [weak self] error in
+            self?.floatingPill.showError("重试失败")
+            self?.soundFeedback.playError()
+            self?.statusBar.state = .idle
+            self?.statusBar.buildMenu()
+            Task { try? await engine.close() }
+        }
+
+        // 发送保存的音频数据
+        Task {
+            do {
+                try await engine.connect()
+                // 分块发送（每次 3200 bytes = 100ms @16kHz mono s16le）
+                let chunkSize = 3200
+                var offset = 0
+                while offset < pcmData.count {
+                    let end = min(offset + chunkSize, pcmData.count)
+                    let chunk = pcmData[offset..<end]
+                    try await engine.sendAudio(Data(chunk))
+                    offset = end
+                }
+                try await engine.finishInput()
+            } catch {
+                DispatchQueue.main.async {
+                    self.floatingPill.showError("重试连接失败")
+                    self.statusBar.state = .idle
+                }
+            }
+        }
+    }
+
+    // MARK: - 日记模式
+
+    private func setupJournalHotkey() {
+        journalHotkeyManager?.stop()
+        journalHotkeyManager = nil
+
+        guard let jh = config.journalHotkey else { return }
+
+        journalHotkeyManager = HotkeyManager(
+            keyCode: jh.keyCode,
+            modifiers: jh.modifierFlags
+        )
+        journalHotkeyManager?.start(
+            onKeyDown: { [weak self] in
+                self?.isJournalMode = true
+                self?.handleKeyDown()
+            },
+            onKeyUp: { [weak self] in
+                self?.handleKeyUp()
+            }
+        )
     }
 
     public func reloadConfig() {
@@ -133,6 +250,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             onKeyDown: { [weak self] in self?.handleKeyDown() },
             onKeyUp: { [weak self] in self?.handleKeyUp() }
         )
+
+        // 重新注册日记快捷键
+        setupJournalHotkey()
 
         // 重新初始化 LLM
         if let key = config.llmApiKey, !key.isEmpty,
@@ -222,29 +342,26 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         engine.onComplete = { [weak self] text in
             guard let self = self else { return }
+
+            // 保存录音到本地（无论成功与否，用于重试）
+            let recordingData = self.recorder.lastRecordingData
+            if !recordingData.isEmpty {
+                self.lastRecordingURL = RecordingStore.save(pcmData: recordingData)
+            }
+
             if !text.isEmpty {
                 self.lastTranscription = text
 
-                // 合并启用的 skills 为一个综合 preset
-                let preset = PresetManager.buildCombinedPreset(
-                    enabledSkillIds: self.config.effectiveSkills
-                )
-
-                self.asyncReplacer.processAndInsert(
-                    asrText: text,
-                    llmProvider: self.llmProvider,
-                    preset: preset,
-                    onPolishStart: {
-                        self.floatingPill.show(state: .polishing)
-                    },
-                    onComplete: { finalText, wasPolished in
-                        self.lastTranscription = finalText
-                        self.floatingPill.hide()
-                        self.statusBar.state = .idle
-                        self.statusBar.buildMenu()
-                    }
-                )
+                if self.isJournalMode {
+                    // 日记模式：保存到备忘录
+                    self.isJournalMode = false
+                    self.processForJournal(asrText: text)
+                } else {
+                    // 普通模式：插入到光标
+                    self.processForCursor(asrText: text)
+                }
             } else {
+                self.isJournalMode = false
                 self.floatingPill.hide()
                 self.statusBar.state = .idle
                 self.statusBar.buildMenu()
@@ -258,6 +375,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         engine.onError = { [weak self] error in
             guard let self = self else { return }
+
+            // 识别失败时也保存录音（重试用）
+            let recordingData = self.recorder.lastRecordingData
+            if !recordingData.isEmpty {
+                self.lastRecordingURL = RecordingStore.save(pcmData: recordingData)
+            }
+
             self.floatingPill.showError(error.localizedDescription)
             self.soundFeedback.playError()
             self.statusBar.state = .idle
@@ -334,6 +458,66 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     self.floatingPill.showError("识别失败")
                     self.statusBar.state = .idle
                 }
+            }
+        }
+    }
+
+    // MARK: - 文本处理路由
+
+    /// 普通模式：LLM 润色后插入光标
+    private func processForCursor(asrText: String) {
+        let preset = PresetManager.buildCombinedPreset(
+            enabledSkillIds: config.effectiveSkills
+        )
+        asyncReplacer.processAndInsert(
+            asrText: asrText,
+            llmProvider: llmProvider,
+            preset: preset,
+            onPolishStart: {
+                self.floatingPill.show(state: .polishing)
+            },
+            onComplete: { finalText, _ in
+                self.lastTranscription = finalText
+                self.floatingPill.hide()
+                self.statusBar.state = .idle
+                self.statusBar.buildMenu()
+            }
+        )
+    }
+
+    /// 日记模式：LLM 润色后保存到备忘录
+    private func processForJournal(asrText: String) {
+        let preset = PresetManager.buildCombinedPreset(
+            enabledSkillIds: config.effectiveSkills
+        )
+
+        guard let provider = llmProvider, let preset = preset else {
+            // 无 LLM，直接保存原文到备忘录
+            NotesIntegration.appendToDaily(text: asrText)
+            floatingPill.showDone("已保存到备忘录")
+            statusBar.state = .idle
+            statusBar.buildMenu()
+            return
+        }
+
+        floatingPill.show(state: .polishing)
+
+        Task {
+            let finalText: String
+            do {
+                let polished = try await provider.process(text: asrText, preset: preset)
+                finalText = polished.isEmpty ? asrText : polished
+            } catch {
+                finalText = asrText
+            }
+
+            NotesIntegration.appendToDaily(text: finalText)
+
+            DispatchQueue.main.async {
+                self.lastTranscription = finalText
+                self.floatingPill.showDone("已保存到备忘录")
+                self.statusBar.state = .idle
+                self.statusBar.buildMenu()
             }
         }
     }

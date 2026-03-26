@@ -151,6 +151,16 @@ class StatusBarController: NSObject {
         if lastText == nil { copyItem.isEnabled = false }
         menu.addItem(copyItem)
 
+        let hasRecording = (NSApplication.shared.delegate as? AppDelegate)?.lastRecordingURL != nil
+        let retryTarget = MenuItemTarget {
+            (NSApplication.shared.delegate as? AppDelegate)?.retryLastRecording()
+        }
+        menuItemTargets.append(retryTarget)
+        let retryItem = NSMenuItem(title: "Retry Last Recording", action: hasRecording ? #selector(MenuItemTarget.invoke) : nil, keyEquivalent: "t")
+        retryItem.target = retryTarget
+        if !hasRecording { retryItem.isEnabled = false }
+        menu.addItem(retryItem)
+
         let dictTarget = MenuItemTarget {
             StatusBarController.openDictionary()
         }

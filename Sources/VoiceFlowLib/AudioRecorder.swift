@@ -28,9 +28,13 @@ class AudioRecorder {
     /// 当前音频电平（0.0-1.0），用于驱动波形动画
     private(set) var currentLevel: Float = 0
 
-    /// Streaming 模式录音 — 音频通过 callback 实时发送，不写文件
+    /// 本次录音的完整 PCM 数据（用于本地保存 + 重试）
+    private(set) var lastRecordingData = Data()
+
+    /// Streaming 模式录音 — 音频通过 callback 实时发送，同时缓存到内存
     func startStreaming() throws {
         guard !isRecording else { return }
+        lastRecordingData = Data()
 
         let engine = AVAudioEngine()
         let inputNode = engine.inputNode
@@ -67,6 +71,9 @@ class AudioRecorder {
 
                 // 将 Float32 PCM 转换为 Int16 LE
                 let int16Data = self.convertToInt16LE(convertedBuffer)
+
+                // 保存到录音缓冲区（用于本地保存 + 重试）
+                self.lastRecordingData.append(int16Data)
 
                 if let callback = self.streamingCallback {
                     // WebSocket 已连接，直接发送

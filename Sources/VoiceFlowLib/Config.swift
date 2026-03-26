@@ -12,6 +12,8 @@ public struct Config: Codable {
     public var enabledSkills: [String]?
     public var startSound: FlexBool?
     public var stopSound: FlexBool?
+    /// 日记模式快捷键（按下后录音内容保存到备忘录而非插入光标）
+    public var journalHotkey: HotkeyConfig?
 
     /// 获取启用的 skill 列表（默认开启 grammar + filter）
     public var effectiveSkills: [String] {
