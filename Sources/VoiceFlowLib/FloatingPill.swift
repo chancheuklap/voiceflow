@@ -298,7 +298,7 @@ private struct PillContentView: View {
         case .recording:
             GlowBorderView(color: .green, cornerRadius: cornerRadius, speed: 2.0, isRainbow: true)
         case .processing, .polishing:
-            GlowBorderView(color: Color(hue: 0.09, saturation: 0.45, brightness: 0.85),
+            GlowBorderView(color: Color(hue: 0.13, saturation: 0.35, brightness: 1.0),
                            cornerRadius: cornerRadius, speed: 1.5)
         case .done:
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

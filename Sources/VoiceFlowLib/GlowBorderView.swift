@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 呼吸边框 — 柔和脉动
-/// isRainbow=true 时每次呼吸切换一种颜色，false 时单色呼吸
+/// 呼吸边框 — 柔光脉动，双层模拟光晕感
+/// isRainbow=true 时每次呼吸在最暗点切换颜色，false 时单色呼吸
 struct GlowBorderView: View {
     let color: Color
     let cornerRadius: CGFloat
@@ -17,35 +17,45 @@ struct GlowBorderView: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate
-            let phase = time * 2.0
-            let breathe = 0.35 + 0.6 * ((sin(phase) + 1.0) / 2.0)
-
-            if isRainbow {
-                // 每次呼吸到最暗时切换颜色（过渡无感）
-                let cycleIndex = Int(floor(phase / (2.0 * .pi)))
-                let colorIndex = abs(cycleIndex) % Self.elegantColors.count
-                let currentColor = Self.elegantColors[colorIndex]
-
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(currentColor, lineWidth: 2)
-                    .opacity(breathe)
-            } else {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(color, lineWidth: 2)
-                    .opacity(breathe)
-            }
+            breathingBorder(time: timeline.date.timeIntervalSinceReferenceDate)
         }
     }
 
-    // 高雅色轮：莫兰迪色调 + 珠宝色点缀
-    private static let elegantColors: [Color] = [
-        Color(hue: 0.58, saturation: 0.35, brightness: 0.92),  // 雾蓝
-        Color(hue: 0.85, saturation: 0.30, brightness: 0.95),  // 藕粉
-        Color(hue: 0.45, saturation: 0.30, brightness: 0.88),  // 灰豆绿
-        Color(hue: 0.72, saturation: 0.35, brightness: 0.90),  // 烟紫
-        Color(hue: 0.10, saturation: 0.30, brightness: 0.95),  // 裸杏
-        Color(hue: 0.52, saturation: 0.25, brightness: 0.90),  // 青瓷
-        Color(hue: 0.92, saturation: 0.30, brightness: 0.93),  // 暮玫
+    private func breathingBorder(time: Double) -> some View {
+        let phase = time * 2.0
+        let breathe = 0.1 + 0.9 * ((sin(phase) + 1.0) / 2.0)
+
+        let currentColor: Color
+        if isRainbow {
+            let cyclePhase = phase + .pi / 2
+            let cycleIndex = Int(floor(cyclePhase / (2.0 * .pi)))
+            let colorIndex = abs(cycleIndex) % Self.smoothColors.count
+            currentColor = Self.smoothColors[colorIndex]
+        } else {
+            currentColor = color
+        }
+
+        return ZStack {
+            // 外层柔光
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(currentColor, lineWidth: 5)
+                .opacity(breathe * 0.35)
+
+            // 内层核心
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(currentColor, lineWidth: 1.5)
+                .opacity(breathe)
+        }
+    }
+
+    // 暖绿色系：偏黄绿的春天色调
+    private static let smoothColors: [Color] = [
+        Color(hue: 0.22, saturation: 0.35, brightness: 0.95),  // 嫩芽
+        Color(hue: 0.25, saturation: 0.38, brightness: 0.93),  // 春绿
+        Color(hue: 0.28, saturation: 0.35, brightness: 0.95),  // 新叶
+        Color(hue: 0.31, saturation: 0.38, brightness: 0.93),  // 草绿
+        Color(hue: 0.28, saturation: 0.35, brightness: 0.95),  // 新叶
+        Color(hue: 0.25, saturation: 0.38, brightness: 0.93),  // 春绿
+        Color(hue: 0.22, saturation: 0.35, brightness: 0.95),  // 嫩芽
     ]
 }
