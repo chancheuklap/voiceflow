@@ -1,18 +1,36 @@
 import Foundation
 
 /// macOS 备忘录集成 — 通过 AppleScript 将文字追加到当天的日记笔记
+/// 所有笔记存放在备忘录的 "VoiceFlow" 文件夹中
 struct NotesIntegration {
 
-    /// 启动时确保今天的日记笔记存在（空笔记，只有标题）
+    private static let folderName = "VoiceFlow"
+
+    /// 启动时确保今天的日记笔记存在（h1 标题格式）
     static func ensureTodayNote() {
         let noteTitle = todayTitle()
+        let noteBody = "<h1>\(escapeForHTML(noteTitle))</h1>"
 
         let script = """
         tell application "Notes"
+            -- 确保 VoiceFlow 文件夹存在
+            set folderName to "\(folderName)"
+            set targetFolder to missing value
+            repeat with f in folders of default account
+                if name of f is folderName then
+                    set targetFolder to f
+                    exit repeat
+                end if
+            end repeat
+            if targetFolder is missing value then
+                set targetFolder to make new folder at default account with properties {name:folderName}
+            end if
+
+            -- 在该文件夹中查找今天的笔记
             set noteTitle to "\(escapeForAppleScript(noteTitle))"
-            set matchingNotes to notes of default account whose name is noteTitle
+            set matchingNotes to notes of targetFolder whose name is noteTitle
             if (count of matchingNotes) = 0 then
-                make new note at default account with properties {name:noteTitle, body:""}
+                make new note at targetFolder with properties {body:"\(escapeForAppleScript(noteBody))"}
             end if
         end tell
         """
@@ -29,7 +47,7 @@ struct NotesIntegration {
         }
     }
 
-    /// 追加一条日记到备忘录（当天的笔记不存在则自动创建）
+    /// 追加一条日记到备忘录
     static func appendToDaily(text: String) {
         let noteTitle = todayTitle()
 
@@ -37,20 +55,33 @@ struct NotesIntegration {
         timeFormatter.dateFormat = "HH:mm"
         let timestamp = timeFormatter.string(from: Date())
 
-        let entry = "\(timestamp)  \(text)"
+        let entryHTML = "<div><br></div><div>\(timestamp)  \(escapeForHTML(text))</div>"
+        let newNoteBody = "<h1>\(escapeForHTML(noteTitle))</h1>\(entryHTML)"
 
-        // AppleScript: 查找今天的笔记，存在则追加，不存在则创建
         let script = """
         tell application "Notes"
-            set noteTitle to "\(escapeForAppleScript(noteTitle))"
-            set noteEntry to "\(escapeForAppleScript(entry))"
+            -- 确保 VoiceFlow 文件夹存在
+            set folderName to "\(folderName)"
+            set targetFolder to missing value
+            repeat with f in folders of default account
+                if name of f is folderName then
+                    set targetFolder to f
+                    exit repeat
+                end if
+            end repeat
+            if targetFolder is missing value then
+                set targetFolder to make new folder at default account with properties {name:folderName}
+            end if
 
-            set matchingNotes to notes of default account whose name is noteTitle
+            -- 查找今天的笔记，追加或创建
+            set noteTitle to "\(escapeForAppleScript(noteTitle))"
+            set noteEntry to "\(escapeForAppleScript(entryHTML))"
+            set matchingNotes to notes of targetFolder whose name is noteTitle
             if (count of matchingNotes) > 0 then
                 set theNote to item 1 of matchingNotes
-                set body of theNote to (body of theNote) & "<br>" & noteEntry
+                set body of theNote to (body of theNote) & noteEntry
             else
-                make new note at default account with properties {name:noteTitle, body:noteEntry}
+                make new note at targetFolder with properties {body:"\(escapeForAppleScript(newNoteBody))"}
             end if
         end tell
         """
@@ -62,7 +93,7 @@ struct NotesIntegration {
             if let error = error {
                 print("Notes error: \(error)")
             } else {
-                print("Journal saved: \(entry)")
+                print("Journal saved: \(timestamp) \(text)")
             }
         }
     }
@@ -73,10 +104,16 @@ struct NotesIntegration {
         return "VoiceFlow 日记 - \(dateFormatter.string(from: Date()))"
     }
 
-    /// 转义 AppleScript 字符串中的特殊字符
     private static func escapeForAppleScript(_ str: String) -> String {
         return str
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
+    private static func escapeForHTML(_ str: String) -> String {
+        return str
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
     }
 }
