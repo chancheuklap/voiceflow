@@ -46,15 +46,15 @@ struct GlowBorderView: View {
         }
     }
 
-    // 优雅彩虹：Sonoma 风格色系，柔和过渡
+    // 淡雅彩虹：低饱和度柔光色系
     private static let elegantRainbow: [Color] = [
-        Color(hue: 0.95, saturation: 0.85, brightness: 1.0),   // 玫红
-        Color(hue: 0.05, saturation: 0.80, brightness: 1.0),   // 珊瑚橙
-        Color(hue: 0.13, saturation: 0.75, brightness: 1.0),   // 暖金
-        Color(hue: 0.42, saturation: 0.70, brightness: 0.95),  // 薄荷绿
-        Color(hue: 0.55, saturation: 0.80, brightness: 1.0),   // 天青蓝
-        Color(hue: 0.68, saturation: 0.75, brightness: 1.0),   // 薰衣紫
-        Color(hue: 0.82, saturation: 0.80, brightness: 1.0),   // 洋红
-        Color(hue: 0.95, saturation: 0.85, brightness: 1.0),   // 回到玫红
+        Color(hue: 0.95, saturation: 0.50, brightness: 1.0),   // 淡玫红
+        Color(hue: 0.06, saturation: 0.50, brightness: 1.0),   // 淡珊瑚
+        Color(hue: 0.14, saturation: 0.45, brightness: 1.0),   // 淡暖金
+        Color(hue: 0.42, saturation: 0.45, brightness: 0.95),  // 淡薄荷
+        Color(hue: 0.55, saturation: 0.50, brightness: 1.0),   // 淡天青
+        Color(hue: 0.70, saturation: 0.45, brightness: 1.0),   // 淡薰紫
+        Color(hue: 0.83, saturation: 0.50, brightness: 1.0),   // 淡洋红
+        Color(hue: 0.95, saturation: 0.50, brightness: 1.0),   // 回到淡玫红
     ]
 }
