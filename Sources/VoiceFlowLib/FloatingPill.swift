@@ -57,8 +57,11 @@ class FloatingPill {
     }
 
     func updateText(_ text: String) {
-        viewModel.currentText = text
-        updatePanelSize(animated: true)
+        // SwiftUI 弹簧独自驱动布局过渡，面板即时缩放不打架
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            viewModel.currentText = text
+        }
+        updatePanelSize(animated: false)
     }
 
     func updateAudioLevel(_ level: CGFloat) {
