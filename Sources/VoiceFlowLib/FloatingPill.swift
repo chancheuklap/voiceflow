@@ -57,7 +57,10 @@ class FloatingPill {
     }
 
     func updateText(_ text: String) {
-        viewModel.currentText = text
+        // SwiftUI 弹簧动画同步面板缩放，避免边框闪烁
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            viewModel.currentText = text
+        }
         updatePanelSize(animated: true)
     }
 
