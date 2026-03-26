@@ -17,19 +17,20 @@ public struct Config: Codable {
 
     /// 获取启用的 skill 列表（默认开启 grammar + filter）
     public var effectiveSkills: [String] {
-        return enabledSkills ?? ["grammar", "filter"]
+        return enabledSkills ?? ["grammar", "filter", "structure"]
     }
 
     public static let defaultConfig = Config(
-        hotkey: HotkeyConfig(keyCode: 63, modifiers: []),
-        toggleMode: FlexBool(false),
+        hotkey: HotkeyConfig(keyCode: 61, modifiers: []),       // Right Option
+        toggleMode: FlexBool(true),                              // 点按切换录音
         sonioxApiKey: nil,
         llmApiKey: nil,
         llmBaseURL: "https://ark.cn-beijing.volces.com/api/v3",
         llmModel: "doubao-seed-2-0-lite-260215",
-        enabledSkills: ["grammar", "filter"],
+        enabledSkills: ["grammar", "filter", "structure"],
         startSound: FlexBool(true),
-        stopSound: FlexBool(true)
+        stopSound: FlexBool(true),
+        journalHotkey: HotkeyConfig(keyCode: 54, modifiers: []) // Right Command
     )
 
     public static var configDir: URL {
