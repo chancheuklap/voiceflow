@@ -22,6 +22,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     public var lastRecordingURL: URL?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        // 设置应用图标
+        loadAppIcon()
+
         statusBar = StatusBarController()
         recorder = AudioRecorder()
         inserter = TextInserter()
@@ -31,6 +34,21 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.setup()
+        }
+    }
+
+    private func loadAppIcon() {
+        // 按优先级查找图标：Homebrew Cellar → 配置目录 → 可执行文件同级
+        let candidates = [
+            "/opt/homebrew/share/voiceflow/icon.png",
+            Config.configDir.appendingPathComponent("icon.png").path,
+            Bundle.main.bundlePath + "/../share/voiceflow/icon.png",
+        ]
+        for path in candidates {
+            if let image = NSImage(contentsOfFile: path) {
+                NSApplication.shared.applicationIconImage = image
+                return
+            }
         }
     }
 

@@ -10,6 +10,7 @@ class Voiceflow < Formula
   def install
     system "swift", "build", "-c", "release", "--disable-sandbox"
     bin.install ".build/release/VoiceFlow"
+    (share/"voiceflow").install "assets/icon.png"
   end
 
   def caveats
