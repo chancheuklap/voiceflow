@@ -7,9 +7,16 @@ public struct Config: Codable {
     public var llmApiKey: String?
     public var llmBaseURL: String?
     public var llmModel: String?
-    public var activePreset: String?
+    /// 启用的 skill ID 列表（可同时开多个，prompt 会合并）
+    /// 可选值: grammar, filter, structure, formal, simplify
+    public var enabledSkills: [String]?
     public var startSound: FlexBool?
     public var stopSound: FlexBool?
+
+    /// 获取启用的 skill 列表（默认开启 grammar + filter）
+    public var effectiveSkills: [String] {
+        return enabledSkills ?? ["grammar", "filter"]
+    }
 
     public static let defaultConfig = Config(
         hotkey: HotkeyConfig(keyCode: 63, modifiers: []),
@@ -18,7 +25,7 @@ public struct Config: Codable {
         llmApiKey: nil,
         llmBaseURL: "https://ark.cn-beijing.volces.com/api/v3",
         llmModel: "doubao-1.5-pro-32k",
-        activePreset: "grammar",
+        enabledSkills: ["grammar", "filter"],
         startSound: FlexBool(true),
         stopSound: FlexBool(true)
     )

@@ -76,8 +76,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
            let baseURL = config.llmBaseURL, !baseURL.isEmpty,
            let model = config.llmModel, !model.isEmpty {
             llmProvider = VolcengineLLM(apiKey: key, baseURL: baseURL, model: model)
-            let presetName = PresetManager.find(id: config.activePreset)?.name ?? "无"
-            print("LLM: configured (\(model), preset: \(presetName))")
+            let skillNames = config.effectiveSkills.compactMap { PresetManager.find(id: $0)?.name }
+            print("LLM: configured (\(model), skills: \(skillNames.joined(separator: " + ")))")
         } else {
             print("LLM: not configured (ASR text will be used as-is)")
         }
@@ -136,6 +136,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
            let baseURL = config.llmBaseURL, !baseURL.isEmpty,
            let model = config.llmModel, !model.isEmpty {
             llmProvider = VolcengineLLM(apiKey: key, baseURL: baseURL, model: model)
+            let skillNames = config.effectiveSkills.compactMap { PresetManager.find(id: $0)?.name }
+            print("LLM skills: \(skillNames.joined(separator: " + "))")
         } else {
             llmProvider = nil
         }
@@ -220,9 +222,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
             if !text.isEmpty {
                 self.lastTranscription = text
-                let preset = PresetManager.find(id: self.config.activePreset)
 
-                self.asyncReplacer.insertAndPolish(
+                // 合并启用的 skills 为一个综合 preset
+                let preset = PresetManager.buildCombinedPreset(
+                    enabledSkillIds: self.config.effectiveSkills
+                )
+
+                self.asyncReplacer.processAndInsert(
                     asrText: text,
                     llmProvider: self.llmProvider,
                     preset: preset,
@@ -231,11 +237,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     },
                     onComplete: { finalText, wasPolished in
                         self.lastTranscription = finalText
-                        if wasPolished {
-                            self.floatingPill.showDone("已润色 (Cmd+V 粘贴)")
-                        } else {
-                            self.floatingPill.showDone(finalText)
-                        }
+                        self.floatingPill.showDone(finalText)
                         self.statusBar.state = .idle
                         self.statusBar.buildMenu()
                     }

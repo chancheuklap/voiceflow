@@ -1,8 +1,8 @@
 import AppKit
 import Foundation
 
-/// 异步文本替换 — ASR 结果插入后，等 LLM 润色完成再替换
-/// 降级策略：如果用户已移动光标，改为复制到剪贴板
+/// 异步文本处理 — 等 LLM 润色完成后直接输出润色结果
+/// 不先插入 ASR 原文，等润色完成后一次性插入最终结果
 class AsyncReplacer {
     private let inserter: TextInserter
 
@@ -10,48 +10,38 @@ class AsyncReplacer {
         self.inserter = inserter
     }
 
-    /// 插入 ASR 原文并异步等待 LLM 润色结果替换
-    /// 返回最终插入的文本（润色后的或原始的）
-    func insertAndPolish(
+    /// 处理 ASR 文本：有 LLM 时先润色再插入，无 LLM 时直接插入
+    func processAndInsert(
         asrText: String,
         llmProvider: LLMProvider?,
         preset: Preset?,
         onPolishStart: (() -> Void)? = nil,
-        onComplete: @escaping (String, Bool) -> Void // (最终文本, 是否润色成功)
+        onComplete: @escaping (String, Bool) -> Void // (最终文本, 是否润色)
     ) {
-        // 如果没有 LLM 或没有预设，直接插入原文
+        // 无 LLM 或无预设 → 直接插入 ASR 原文
         guard let provider = llmProvider, let preset = preset else {
             inserter.insert(text: asrText)
             onComplete(asrText, false)
             return
         }
 
-        // 先插入 ASR 原文（用户立刻看到结果）
-        inserter.insert(text: asrText)
+        // 有 LLM → 先显示"润色中"，等润色完成后插入
         onPolishStart?()
 
-        // 异步润色
         Task {
             do {
                 let polished = try await provider.process(text: asrText, preset: preset)
+                let finalText = polished.isEmpty ? asrText : polished
 
-                if polished != asrText && !polished.isEmpty {
-                    // 润色有变化，复制到剪贴板并提示用户
-                    // （V1 保守策略：不做原地替换，避免光标已移动导致替换错误）
-                    DispatchQueue.main.async {
-                        let pasteboard = NSPasteboard.general
-                        pasteboard.clearContents()
-                        pasteboard.setString(polished, forType: .string)
-                        onComplete(polished, true)
-                    }
-                } else {
-                    DispatchQueue.main.async {
-                        onComplete(asrText, false)
-                    }
+                DispatchQueue.main.async {
+                    self.inserter.insert(text: finalText)
+                    onComplete(finalText, finalText != asrText)
                 }
             } catch {
                 print("LLM error: \(error.localizedDescription)")
+                // 润色失败 → 插入 ASR 原文
                 DispatchQueue.main.async {
+                    self.inserter.insert(text: asrText)
                     onComplete(asrText, false)
                 }
             }

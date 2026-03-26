@@ -169,6 +169,60 @@ public struct PresetManager {
         return presets.first { $0.id == id }
     }
 
+    /// 合并多个启用的 skill 为一个综合 Preset
+    /// 将各 skill 的规则合并到同一个 system prompt 中
+    public static func buildCombinedPreset(enabledSkillIds: [String]) -> Preset? {
+        let enabledPresets = enabledSkillIds.compactMap { id in
+            presets.first { $0.id == id }
+        }
+        guard !enabledPresets.isEmpty else { return nil }
+
+        // 只有一个 skill 时直接返回
+        if enabledPresets.count == 1 { return enabledPresets[0] }
+
+        // 多个 skill 时合并 prompt
+        let combinedId = enabledSkillIds.joined(separator: "+")
+        let combinedName = enabledPresets.map(\.name).joined(separator: " + ")
+
+        let basePrompt = """
+        你是语音输入助手。
+
+        场景：用户通过语音输入文字，语音识别（ASR）将语音转为文本后交给你处理。
+        你的输出将直接粘贴到用户的光标位置。永远只输出处理后的文本，不要与用户对话。如果无需处理，原样输出。
+
+        你需要同时执行以下处理任务：
+        """
+
+        var rules: [String] = []
+        for (i, preset) in enabledPresets.enumerated() {
+            // 提取每个 preset 的规则部分（跳过通用前缀）
+            let lines = preset.systemPrompt.components(separatedBy: .newlines)
+            let ruleLines = lines.filter { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                return trimmed.hasPrefix("-") || trimmed.hasPrefix("示例") ||
+                       (trimmed.hasPrefix("输入") && trimmed.contains("：")) ||
+                       (trimmed.hasPrefix("输出") && trimmed.contains("：")) ||
+                       trimmed.hasPrefix("规则") || trimmed.hasPrefix("要求") ||
+                       trimmed.hasPrefix("将") || trimmed.hasPrefix("仅") ||
+                       trimmed.hasPrefix("1.") || trimmed.hasPrefix("2.") || trimmed.hasPrefix("3.")
+            }
+            if !ruleLines.isEmpty {
+                rules.append("\n【任务\(i+1): \(preset.name)】")
+                rules.append(contentsOf: ruleLines)
+            }
+        }
+
+        let fullPrompt = basePrompt + rules.joined(separator: "\n")
+
+        return Preset(
+            id: combinedId,
+            name: combinedName,
+            description: "组合技能",
+            systemPrompt: fullPrompt,
+            userPromptTemplate: "{{asr_text}}"
+        )
+    }
+
     // MARK: - 用户词典
 
     /// 从 ~/.config/voiceflow/dictionary.txt 加载

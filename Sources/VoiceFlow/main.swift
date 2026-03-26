@@ -31,7 +31,8 @@ case "status":
     print("Soniox key:  \(config.sonioxApiKey != nil ? "configured" : "not set")")
     print("LLM key:     \(config.llmApiKey != nil ? "configured" : "not set")")
     print("LLM model:   \(config.llmModel ?? "default")")
-    print("Preset:      \(config.activePreset ?? "grammar")")
+    let skillNames = config.effectiveSkills.compactMap { PresetManager.find(id: $0)?.name }
+    print("Skills:      \(skillNames.isEmpty ? "none" : skillNames.joined(separator: " + "))")
 
 case "--help", "-h", "help":
     print("""
@@ -48,7 +49,7 @@ case "--help", "-h", "help":
         - sonioxApiKey:  Your Soniox API key
         - llmApiKey:     Your LLM API key (e.g. Volcengine/Doubao)
         - llmModel:      LLM model name
-        - activePreset:  grammar / formal / simplify / none
+        - enabledSkills:  ["grammar", "filter", "structure", "formal", "simplify"]
     """)
 
 default:
