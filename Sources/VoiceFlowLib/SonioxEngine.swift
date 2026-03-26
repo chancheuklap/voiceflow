@@ -59,12 +59,17 @@ public class SonioxEngine: ASREngine {
     }
 
     public func close() async throws {
+        isFinished = true
         receiveTask?.cancel()
         receiveTask = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
         session?.invalidateAndCancel()
         session = nil
+        onInterimText = nil
+        onFinalText = nil
+        onComplete = nil
+        onError = nil
     }
 
     // MARK: - 后台接收循环
@@ -110,6 +115,17 @@ public class SonioxEngine: ASREngine {
         // 检查错误
         if let errorCode = json["error_code"] as? Int {
             let errorMessage = json["error_message"] as? String ?? "Unknown error"
+
+            // "No audio received" = 用户快速按松没说话，静默处理
+            if errorMessage.contains("No audio received") {
+                isFinished = true
+                receiveTask?.cancel()
+                DispatchQueue.main.async { [weak self] in
+                    self?.onComplete?("")
+                }
+                return
+            }
+
             DispatchQueue.main.async { [weak self] in
                 if errorCode == 401 {
                     self?.onError?(ASRError.authenticationFailed)

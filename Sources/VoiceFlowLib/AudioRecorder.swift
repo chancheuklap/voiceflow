@@ -6,7 +6,24 @@ class AudioRecorder {
     private var isRecording = false
 
     /// Streaming 模式的回调 — 每次音频 tap 触发时发送 PCM s16le 数据
-    var streamingCallback: ((Data) -> Void)?
+    var streamingCallback: ((Data) -> Void)? {
+        didSet {
+            // callback 设置后，立即发送启动缓冲区中的音频（防止首字丢失）
+            if let callback = streamingCallback {
+                bufferLock.lock()
+                let buffered = startupBuffer
+                startupBuffer.removeAll()
+                bufferLock.unlock()
+                for chunk in buffered {
+                    callback(chunk)
+                }
+            }
+        }
+    }
+
+    /// 启动缓冲区——录音先于 WebSocket 连接开始，音频暂存在这里
+    private var startupBuffer: [Data] = []
+    private let bufferLock = NSLock()
 
     /// 当前音频电平（0.0-1.0），用于驱动波形动画
     private(set) var currentLevel: Float = 0
@@ -48,10 +65,17 @@ class AudioRecorder {
                 // 计算音频电平（用于波形动画）
                 self.updateLevel(from: convertedBuffer)
 
-                // 将 Float32 PCM 转换为 Int16 LE 并通过 callback 发送
+                // 将 Float32 PCM 转换为 Int16 LE
+                let int16Data = self.convertToInt16LE(convertedBuffer)
+
                 if let callback = self.streamingCallback {
-                    let int16Data = self.convertToInt16LE(convertedBuffer)
+                    // WebSocket 已连接，直接发送
                     callback(int16Data)
+                } else {
+                    // WebSocket 未连接，缓冲到内存（防止首字丢失）
+                    self.bufferLock.lock()
+                    self.startupBuffer.append(int16Data)
+                    self.bufferLock.unlock()
                 }
             }
         }
@@ -71,6 +95,9 @@ class AudioRecorder {
         audioEngine = nil
         isRecording = false
         currentLevel = 0
+        bufferLock.lock()
+        startupBuffer.removeAll()
+        bufferLock.unlock()
     }
 
     // MARK: - Float32 → Int16 LE 转换
@@ -107,8 +134,12 @@ class AudioRecorder {
             sum += sample * sample
         }
         let rms = sqrt(sum / Float(frameCount))
-        // 简单的平滑 + 归一化到 0-1（RMS 通常在 0.0-0.3 范围）
-        let normalized = min(1.0, rms * 4.0)
-        currentLevel = currentLevel * 0.3 + normalized * 0.7
+        // 快速响应：上升快、下降略慢，更灵动
+        let normalized = min(1.0, rms * 5.0)
+        if normalized > currentLevel {
+            currentLevel = currentLevel * 0.15 + normalized * 0.85 // 快速上升
+        } else {
+            currentLevel = currentLevel * 0.6 + normalized * 0.4  // 较快下降
+        }
     }
 }
