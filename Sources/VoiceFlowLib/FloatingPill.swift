@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// 浮动状态胶囊 — 磨砂玻璃 + 跑马灯边框
+/// 浮动状态胶囊 — 水晶毛玻璃 + 跑马灯边框 + 弹簧动画
 class FloatingPill {
     private var panel: NSPanel?
     private var hostingView: NSHostingView<AnyView>?
@@ -9,7 +9,8 @@ class FloatingPill {
     private var hideTimer: Timer?
     private var isHiding = false
 
-    private let panelWidth: CGFloat = 280
+    private let panelWidth: CGFloat = 300
+    private let cornerRadius: CGFloat = 22
 
     init() {
         setupPanel()
@@ -20,24 +21,47 @@ class FloatingPill {
     func show(state: PillState) {
         hideTimer?.invalidate()
         hideTimer = nil
-        cancelHideIfNeeded()
 
-        viewModel.state = state
+        // 取消正在进行的隐藏动画
+        if isHiding {
+            panel?.alphaValue = 1.0
+            isHiding = false
+        }
+
+        // 弹簧动画驱动状态切换
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.72)) {
+            viewModel.state = state
+        }
 
         if let frontApp = NSWorkspace.shared.frontmostApplication {
             viewModel.appName = frontApp.localizedName ?? ""
             viewModel.appIcon = frontApp.icon
         }
 
-        if panel?.isVisible != true {
+        let wasHidden = panel?.isVisible != true
+        if wasHidden {
+            panel?.alphaValue = 0
             panel?.orderFrontRegardless()
         }
-        updatePanelSize()
+
+        updatePanelSize(animated: !wasHidden)
+
+        // 淡入出现
+        if wasHidden {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.3
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                self.panel?.animator().alphaValue = 1.0
+            }
+        }
     }
 
     func updateText(_ text: String) {
-        viewModel.currentText = text
-        updatePanelSize()
+        // SwiftUI 弹簧独自驱动布局过渡，面板即时缩放不打架
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            viewModel.currentText = text
+        }
+        updatePanelSize(animated: false)
     }
 
     func updateAudioLevel(_ level: CGFloat) {
@@ -47,49 +71,80 @@ class FloatingPill {
     func showDone(_ text: String, autoDismiss: TimeInterval = 1.5) {
         hideTimer?.invalidate()
         hideTimer = nil
-        cancelHideIfNeeded()
-        viewModel.state = .done(text)
-        if panel?.isVisible != true {
-            panel?.orderFrontRegardless()
+        if isHiding {
+            panel?.alphaValue = 1.0
+            isHiding = false
         }
-        updatePanelSize()
+
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            viewModel.state = .done(text)
+        }
+
+        if panel?.isVisible != true {
+            panel?.alphaValue = 0
+            panel?.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.3
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                self.panel?.animator().alphaValue = 1.0
+            }
+        }
+        updatePanelSize(animated: true)
         scheduleHide(after: autoDismiss)
     }
 
     func showError(_ message: String, autoDismiss: TimeInterval = 3.0) {
         hideTimer?.invalidate()
         hideTimer = nil
-        cancelHideIfNeeded()
-        viewModel.state = .error(message)
-        if panel?.isVisible != true {
-            panel?.orderFrontRegardless()
+        if isHiding {
+            panel?.alphaValue = 1.0
+            isHiding = false
         }
-        updatePanelSize()
+
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            viewModel.state = .error(message)
+        }
+
+        if panel?.isVisible != true {
+            panel?.alphaValue = 0
+            panel?.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.3
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                self.panel?.animator().alphaValue = 1.0
+            }
+        }
+        updatePanelSize(animated: true)
         scheduleHide(after: autoDismiss)
     }
 
     func hide() {
         hideTimer?.invalidate()
         hideTimer = nil
-        panel?.orderOut(nil)
-        viewModel.state = .idle
-        viewModel.currentText = ""
-        viewModel.audioLevel = 0
-        isHiding = false
+
+        guard !isHiding else { return }
+        isHiding = true
+
+        // 淡出消失
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.25
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            self.panel?.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            guard let self = self, self.isHiding else { return }
+            self.panel?.orderOut(nil)
+            self.panel?.alphaValue = 1.0
+            self.viewModel.state = .idle
+            self.viewModel.currentText = ""
+            self.viewModel.audioLevel = 0
+            self.isHiding = false
+        })
     }
 
-    // MARK: - 内部
-
-    private func cancelHideIfNeeded() {
-        // 取消定时器驱动的延迟隐藏
-        hideTimer?.invalidate()
-        hideTimer = nil
-    }
-
-    // MARK: - Panel 创建（完全复用 commit 2087078 的确认可用架构）
+    // MARK: - Panel 创建
 
     private func setupPanel() {
-        let contentView = PillContentView(viewModel: viewModel)
+        let contentView = PillContentView(viewModel: viewModel, cornerRadius: cornerRadius)
             .frame(width: panelWidth)
 
         let hosting = NSHostingView(rootView: AnyView(contentView))
@@ -108,22 +163,24 @@ class FloatingPill {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
 
-        // 容器：圆角裁剪
+        // 容器：连续曲线圆角 + 深色外观
         let container = NSView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: 80))
         container.wantsLayer = true
-        container.layer?.cornerRadius = 16
+        container.layer?.cornerRadius = cornerRadius
+        container.layer?.cornerCurve = .continuous
         container.layer?.masksToBounds = true
+        container.appearance = NSAppearance(named: .vibrantDark)
 
-        // 毛玻璃（AppKit 原生，这个组合确认可用）
+        // 毛玻璃
         let blur = NSVisualEffectView(frame: container.bounds)
         blur.autoresizingMask = [.width, .height]
         blur.blendingMode = .behindWindow
-        blur.material = .titlebar
+        blur.material = .hudWindow
         blur.state = .active
-        blur.appearance = NSAppearance(named: .vibrantLight)
+        blur.alphaValue = 0.88
         container.addSubview(blur)
 
-        // SwiftUI 内容
+        // SwiftUI 内容层
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]
         container.addSubview(hosting)
@@ -132,7 +189,6 @@ class FloatingPill {
         self.panel = panel
         self.hostingView = hosting
 
-        // 清除 NSHostingView 不透明背景
         clearHostingBackground()
     }
 
@@ -152,7 +208,7 @@ class FloatingPill {
         }
     }
 
-    private func updatePanelSize() {
+    private func updatePanelSize(animated: Bool = false) {
         guard let hosting = hostingView, let panel = panel, let screen = NSScreen.main else { return }
 
         let fittingSize = hosting.fittingSize
@@ -162,8 +218,17 @@ class FloatingPill {
         let x = screenFrame.midX - panelWidth / 2
         let y = screenFrame.origin.y + 60
 
-        panel.setFrame(NSRect(x: x, y: y, width: panelWidth, height: height), display: true)
-        panel.contentView?.frame = NSRect(x: 0, y: 0, width: panelWidth, height: height)
+        let newFrame = NSRect(x: x, y: y, width: panelWidth, height: height)
+
+        if animated && panel.isVisible {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.3
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(newFrame, display: true)
+            }
+        } else {
+            panel.setFrame(newFrame, display: true)
+        }
 
         clearHostingBackground()
     }
@@ -190,10 +255,11 @@ private class PillViewModel: ObservableObject {
 
 private struct PillContentView: View {
     @ObservedObject var viewModel: PillViewModel
+    let cornerRadius: CGFloat
 
     var body: some View {
         ZStack {
-            // 清除 NSHostingView 不透明背景
+            // NSHostingView 透明背景修复
             TransparentHostingFix()
                 .frame(width: 0, height: 0)
 
@@ -201,25 +267,44 @@ private struct PillContentView: View {
                 topRow
                 bottomRow
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(glassHighlight)
         .overlay(glowOverlay)
+    }
+
+    /// 玻璃高光内边框 — 顶部亮、底部暗的渐变细线，模拟水晶棱角折射
+    private var glassHighlight: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .strokeBorder(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.5),
+                        Color.white.opacity(0.2),
+                        Color.white.opacity(0.08)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                lineWidth: 0.5
+            )
     }
 
     @ViewBuilder
     private var glowOverlay: some View {
         switch viewModel.state {
         case .recording:
-            GlowBorderView(color: .green, speed: 2.0)
+            GlowBorderView(color: .green, cornerRadius: cornerRadius, speed: 2.0, isRainbow: true)
         case .processing, .polishing:
-            GlowBorderView(color: .blue, speed: 1.5)
+            GlowBorderView(color: Color(hue: 0.09, saturation: 0.45, brightness: 0.85),
+                           cornerRadius: cornerRadius, speed: 1.5)
         case .done:
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(Color.green.opacity(0.4), lineWidth: 1)
         case .error:
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(Color.red.opacity(0.4), lineWidth: 1)
         case .idle:
             EmptyView()
@@ -232,59 +317,75 @@ private struct PillContentView: View {
         case .recording:
             if viewModel.currentText.isEmpty {
                 appInfoRow
+                    .transition(.opacity)
             } else {
                 Text(viewModel.currentText)
-                    .font(.system(size: 13))
-                    .foregroundColor(.primary.opacity(0.8))
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.primary.opacity(0.85))
                     .lineLimit(5)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity)
             }
 
         case .processing:
             HStack {
                 Text("识别中")
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundColor(.primary.opacity(0.6))
                 Spacer()
-                ProgressView()
-                    .controlSize(.small)
+                PulsingDotsView()
             }
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.95)),
+                removal: .opacity
+            ))
 
         case .polishing:
             HStack {
                 Text("润色中")
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundColor(.primary.opacity(0.6))
                 Spacer()
-                ProgressView()
-                    .controlSize(.small)
+                PulsingDotsView()
             }
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.95)),
+                removal: .opacity
+            ))
 
         case .done(let text):
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
-                    .font(.system(size: 14))
+                    .font(.system(size: 14, design: .rounded))
                 Text(text)
-                    .font(.system(size: 13))
-                    .foregroundColor(.primary.opacity(0.8))
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.primary.opacity(0.85))
                     .lineLimit(4)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.95)),
+                removal: .opacity
+            ))
 
         case .error(let msg):
             HStack(spacing: 6) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.red)
-                    .font(.system(size: 14))
+                    .font(.system(size: 14, design: .rounded))
                 Text(msg)
-                    .font(.system(size: 13))
-                    .foregroundColor(.primary.opacity(0.8))
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.primary.opacity(0.85))
                     .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.95)),
+                removal: .opacity
+            ))
 
         case .idle:
             EmptyView()
@@ -293,15 +394,16 @@ private struct PillContentView: View {
 
     @ViewBuilder
     private var bottomRow: some View {
-        switch viewModel.state {
-        case .recording:
-            WaveformView(audioLevel: viewModel.audioLevel)
+        // 统一 WaveformView 实例，避免 recording→processing 切换时重建视图
+        let showWaveform = viewModel.state == .recording
+            || viewModel.state == .processing
+            || viewModel.state == .polishing
+
+        if showWaveform {
+            let level: CGFloat = viewModel.state == .recording ? viewModel.audioLevel : 0.08
+            WaveformView(audioLevel: level)
                 .frame(height: 20)
-        case .processing, .polishing:
-            WaveformView(audioLevel: 0.08)
-                .frame(height: 20)
-        default:
-            EmptyView()
+                .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .center)))
         }
     }
 
@@ -315,14 +417,38 @@ private struct PillContentView: View {
                         .cornerRadius(4)
                 }
                 Text(viewModel.appName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary.opacity(0.8))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundColor(.primary.opacity(0.85))
                     .lineLimit(1)
             }
             Spacer()
             Text("VoiceFlow")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundColor(.primary.opacity(0.4))
+        }
+    }
+}
+
+// MARK: - 三点脉冲加载指示器（类似 iMessage 输入动画）
+
+private struct PulsingDotsView: View {
+    @State private var activeIndex = 0
+    private let dotCount = 3
+    private let dotSize: CGFloat = 4
+    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<dotCount, id: \.self) { index in
+                Circle()
+                    .fill(Color.primary.opacity(index == activeIndex ? 0.8 : 0.3))
+                    .frame(width: dotSize, height: dotSize)
+                    .scaleEffect(index == activeIndex ? 1.3 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: activeIndex)
+            }
+        }
+        .onReceive(timer) { _ in
+            activeIndex = (activeIndex + 1) % dotCount
         }
     }
 }
