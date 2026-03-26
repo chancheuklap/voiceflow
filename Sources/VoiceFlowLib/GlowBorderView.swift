@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 呼吸边框 — 柔和脉动
-/// isRainbow=true 时彩虹色缓慢流动，false 时单色呼吸
+/// isRainbow=true 时每次呼吸切换一种颜色，false 时单色呼吸
 struct GlowBorderView: View {
     let color: Color
     let cornerRadius: CGFloat
@@ -18,25 +18,17 @@ struct GlowBorderView: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
-            let breathe = 0.35 + 0.6 * ((sin(time * 2.0) + 1.0) / 2.0)
+            let phase = time * 2.0
+            let breathe = 0.35 + 0.6 * ((sin(phase) + 1.0) / 2.0)
 
             if isRainbow {
-                // 旋转线性渐变 — 颜色在宽扁 pill 上分布均匀
-                let angle = time * 0.5
-                let gradient = LinearGradient(
-                    gradient: Gradient(colors: Self.elegantRainbow),
-                    startPoint: UnitPoint(
-                        x: 0.5 + 0.5 * cos(angle),
-                        y: 0.5 + 0.5 * sin(angle)
-                    ),
-                    endPoint: UnitPoint(
-                        x: 0.5 - 0.5 * cos(angle),
-                        y: 0.5 - 0.5 * sin(angle)
-                    )
-                )
+                // 每次呼吸到最暗时切换颜色（过渡无感）
+                let cycleIndex = Int(floor(phase / (2.0 * .pi)))
+                let colorIndex = abs(cycleIndex) % Self.elegantColors.count
+                let currentColor = Self.elegantColors[colorIndex]
 
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(gradient, lineWidth: 2)
+                    .strokeBorder(currentColor, lineWidth: 2)
                     .opacity(breathe)
             } else {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -46,15 +38,14 @@ struct GlowBorderView: View {
         }
     }
 
-    // 淡雅彩虹：低饱和度柔光色系
-    private static let elegantRainbow: [Color] = [
-        Color(hue: 0.95, saturation: 0.50, brightness: 1.0),   // 淡玫红
-        Color(hue: 0.06, saturation: 0.50, brightness: 1.0),   // 淡珊瑚
-        Color(hue: 0.14, saturation: 0.45, brightness: 1.0),   // 淡暖金
-        Color(hue: 0.42, saturation: 0.45, brightness: 0.95),  // 淡薄荷
-        Color(hue: 0.55, saturation: 0.50, brightness: 1.0),   // 淡天青
-        Color(hue: 0.70, saturation: 0.45, brightness: 1.0),   // 淡薰紫
-        Color(hue: 0.83, saturation: 0.50, brightness: 1.0),   // 淡洋红
-        Color(hue: 0.95, saturation: 0.50, brightness: 1.0),   // 回到淡玫红
+    // 高雅色轮：莫兰迪色调 + 珠宝色点缀
+    private static let elegantColors: [Color] = [
+        Color(hue: 0.58, saturation: 0.35, brightness: 0.92),  // 雾蓝
+        Color(hue: 0.85, saturation: 0.30, brightness: 0.95),  // 藕粉
+        Color(hue: 0.45, saturation: 0.30, brightness: 0.88),  // 灰豆绿
+        Color(hue: 0.72, saturation: 0.35, brightness: 0.90),  // 烟紫
+        Color(hue: 0.10, saturation: 0.30, brightness: 0.95),  // 裸杏
+        Color(hue: 0.52, saturation: 0.25, brightness: 0.90),  // 青瓷
+        Color(hue: 0.92, saturation: 0.30, brightness: 0.93),  // 暮玫
     ]
 }
