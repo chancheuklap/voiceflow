@@ -15,6 +15,19 @@ class StatusBarController: NSObject {
 
     var onConfigChange: ((Config) -> Void)?
 
+    enum UpdateState {
+        case idle           // 未检查
+        case checking       // 检查中
+        case available(UpdateInfo)  // 有新版本
+        case upToDate       // 已是最新
+        case downloading    // 下载中
+        case error(String)  // 出错
+    }
+
+    var updateState: UpdateState = .idle {
+        didSet { buildMenu() }
+    }
+
     enum State {
         case idle
         case recording
@@ -180,6 +193,52 @@ class StatusBarController: NSObject {
         let openItem = NSMenuItem(title: "Open Configuration", action: #selector(openConfiguration), keyEquivalent: "o")
         openItem.target = self
         menu.addItem(openItem)
+
+        // ── 更新 ──
+
+        menu.addItem(NSMenuItem.separator())
+
+        switch updateState {
+        case .idle:
+            let checkTarget = MenuItemTarget { [weak self] in
+                self?.updateState = .checking
+                UpdateChecker.shared.checkForUpdates(silent: false)
+            }
+            menuItemTargets.append(checkTarget)
+            let checkItem = NSMenuItem(title: "检查更新...", action: #selector(MenuItemTarget.invoke), keyEquivalent: "u")
+            checkItem.target = checkTarget
+            menu.addItem(checkItem)
+
+        case .checking:
+            let checkingItem = NSMenuItem(title: "检查中...", action: nil, keyEquivalent: "")
+            checkingItem.isEnabled = false
+            menu.addItem(checkingItem)
+
+        case .available(let info):
+            let installTarget = MenuItemTarget { [weak self] in
+                self?.updateState = .downloading
+                UpdateChecker.shared.downloadAndInstall(info)
+            }
+            menuItemTargets.append(installTarget)
+            let installItem = NSMenuItem(title: "安装更新 v\(info.version) →", action: #selector(MenuItemTarget.invoke), keyEquivalent: "u")
+            installItem.target = installTarget
+            menu.addItem(installItem)
+
+        case .upToDate:
+            let upToDateItem = NSMenuItem(title: "已是最新版本 ✓", action: nil, keyEquivalent: "")
+            upToDateItem.isEnabled = false
+            menu.addItem(upToDateItem)
+
+        case .downloading:
+            let dlItem = NSMenuItem(title: "下载中，安装后自动重启...", action: nil, keyEquivalent: "")
+            dlItem.isEnabled = false
+            menu.addItem(dlItem)
+
+        case .error(let msg):
+            let errItem = NSMenuItem(title: "更新失败：\(msg)", action: nil, keyEquivalent: "")
+            errItem.isEnabled = false
+            menu.addItem(errItem)
+        }
 
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))

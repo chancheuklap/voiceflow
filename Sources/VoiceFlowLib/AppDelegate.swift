@@ -157,6 +157,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             self?.applyConfigChange(config)
         }
         statusBar.buildMenu()
+        setupUpdateChecker()
 
         let hotkeyDesc = KeyCodes.describe(keyCode: config.hotkey.keyCode, modifiers: config.hotkey.modifiers)
         print("VoiceFlow v\(VoiceFlow.version)")
@@ -558,5 +559,49 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private func stopLevelTimer() {
         levelTimer?.invalidate()
         levelTimer = nil
+    }
+
+    // MARK: - 自动更新
+
+    private func setupUpdateChecker() {
+        let checker = UpdateChecker.shared
+
+        checker.onUpdateAvailable = { [weak self] info in
+            self?.statusBar.updateState = .available(info)
+            self?.floatingPill.showDone("发现新版本 v\(info.version)，点击菜单栏安装", autoDismiss: 4)
+        }
+
+        checker.onAlreadyUpToDate = { [weak self] in
+            self?.statusBar.updateState = .upToDate
+            self?.floatingPill.showDone("已是最新版本 ✓", autoDismiss: 2)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                if case .upToDate = self?.statusBar.updateState ?? .idle {
+                    self?.statusBar.updateState = .idle
+                }
+            }
+        }
+
+        checker.onCheckError = { [weak self] msg in
+            self?.statusBar.updateState = .error(msg)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                if case .error = self?.statusBar.updateState ?? .idle {
+                    self?.statusBar.updateState = .idle
+                }
+            }
+        }
+
+        checker.onDownloadStarted = { [weak self] in
+            self?.floatingPill.showDone("正在下载更新，完成后自动重启...", autoDismiss: 60)
+        }
+
+        checker.onInstallError = { [weak self] msg in
+            self?.statusBar.updateState = .error(msg)
+            self?.floatingPill.showError("更新失败：\(msg)")
+        }
+
+        // 启动后 3 秒静默检查（不打扰用户）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            UpdateChecker.shared.checkForUpdates(silent: true)
+        }
     }
 }

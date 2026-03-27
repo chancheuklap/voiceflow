@@ -5,6 +5,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_NAME="VoiceFlow"
+VERSION=$(grep 'static let version' "$PROJECT_DIR/Sources/VoiceFlowLib/Version.swift" | sed 's/.*"\(.*\)".*/\1/')
 APP_PATH="/Applications/${APP_NAME}.app"
 BUNDLE_ID="com.voiceflow.app"
 
@@ -37,9 +38,9 @@ cat > "$APP_PATH/Contents/Info.plist" << PLIST
     <key>CFBundleIdentifier</key>
     <string>${BUNDLE_ID}</string>
     <key>CFBundleVersion</key>
-    <string>0.3.1</string>
+    <string>${VERSION}</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.3.1</string>
+    <string>${VERSION}</string>
     <key>CFBundleExecutable</key>
     <string>${APP_NAME}</string>
     <key>CFBundleIconFile</key>
