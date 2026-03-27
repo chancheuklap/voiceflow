@@ -1,3 +1,3 @@
 public enum VoiceFlow {
-    public static let version = "0.3.1"
+    public static let version = "0.3.2"
 }
