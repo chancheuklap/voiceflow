@@ -21,6 +21,23 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     /// 上一次录音的本地文件路径（用于重试）
     public var lastRecordingURL: URL?
 
+    // MARK: - 缓存：combined preset（skill 配置不变时无需每次重算）
+    private var cachedCombinedPreset: Preset?
+    private var cachedSkillIds: [String] = []
+
+    /// 日记模式的 in-flight LLM task（防止快速连续触发产生重复条目）
+    private var journalTask: Task<Void, Never>?
+
+    /// 获取合并 preset，命中缓存时直接返回，skill 列表变更时自动重算
+    private func getCombinedPreset() -> Preset? {
+        let currentSkills = config.effectiveSkills
+        if currentSkills != cachedSkillIds || cachedCombinedPreset == nil {
+            cachedCombinedPreset = PresetManager.buildCombinedPreset(enabledSkillIds: currentSkills)
+            cachedSkillIds = currentSkills
+        }
+        return cachedCombinedPreset
+    }
+
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // 设置应用图标
         loadAppIcon()
@@ -176,25 +193,20 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self = self else { return }
             if !text.isEmpty {
                 self.lastTranscription = text
-                let preset = PresetManager.buildCombinedPreset(
-                    enabledSkillIds: self.config.effectiveSkills
-                )
                 self.asyncReplacer.processAndInsert(
                     asrText: text,
                     llmProvider: self.llmProvider,
-                    preset: preset,
+                    preset: self.getCombinedPreset(),
                     onPolishStart: { self.floatingPill.show(state: .polishing) },
                     onComplete: { finalText, _ in
                         self.lastTranscription = finalText
                         self.floatingPill.hide()
                         self.statusBar.state = .idle
-                        self.statusBar.buildMenu()
                     }
                 )
             } else {
                 self.floatingPill.showError("重试未识别到内容")
                 self.statusBar.state = .idle
-                self.statusBar.buildMenu()
             }
             Task { try? await engine.close() }
         }
@@ -203,7 +215,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             self?.floatingPill.showError("重试失败")
             self?.soundFeedback.playError()
             self?.statusBar.state = .idle
-            self?.statusBar.buildMenu()
             Task { try? await engine.close() }
         }
 
@@ -286,6 +297,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             llmProvider = nil
         }
+
+        // 配置变更时清除缓存的 combined preset
+        cachedCombinedPreset = nil
+        cachedSkillIds = []
 
         statusBar.buildMenu()
         let hotkeyDesc = KeyCodes.describe(keyCode: config.hotkey.keyCode, modifiers: config.hotkey.modifiers)
@@ -489,13 +504,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 普通模式：LLM 润色后插入光标
     private func processForCursor(asrText: String) {
-        let preset = PresetManager.buildCombinedPreset(
-            enabledSkillIds: config.effectiveSkills
-        )
         asyncReplacer.processAndInsert(
             asrText: asrText,
             llmProvider: llmProvider,
-            preset: preset,
+            preset: getCombinedPreset(),
             onPolishStart: {
                 self.floatingPill.show(state: .polishing)
             },
@@ -503,44 +515,42 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 self.lastTranscription = finalText
                 self.floatingPill.hide()
                 self.statusBar.state = .idle
-                self.statusBar.buildMenu()
             }
         )
     }
 
     /// 日记模式：LLM 润色后保存到备忘录
     private func processForJournal(asrText: String) {
-        let preset = PresetManager.buildCombinedPreset(
-            enabledSkillIds: config.effectiveSkills
-        )
+        // 取消上一个未完成的日记 LLM 任务，防止快速连续触发产生重复条目
+        journalTask?.cancel()
 
-        guard let provider = llmProvider, let preset = preset else {
+        guard let provider = llmProvider, let preset = getCombinedPreset() else {
             // 无 LLM，直接保存原文到备忘录
             NotesIntegration.appendToDaily(text: asrText)
             floatingPill.showDone("已保存到备忘录")
             statusBar.state = .idle
-            statusBar.buildMenu()
             return
         }
 
         floatingPill.show(state: .polishing)
 
-        Task {
+        journalTask = Task {
             let finalText: String
             do {
                 let polished = try await provider.process(text: asrText, preset: preset)
+                guard !Task.isCancelled else { return }
                 finalText = polished.isEmpty ? asrText : polished
             } catch {
+                guard !Task.isCancelled else { return }
                 finalText = asrText
             }
 
             NotesIntegration.appendToDaily(text: finalText)
 
-            DispatchQueue.main.async {
-                self.lastTranscription = finalText
-                self.floatingPill.showDone("已保存到备忘录")
-                self.statusBar.state = .idle
-                self.statusBar.buildMenu()
+            DispatchQueue.main.async { [weak self] in
+                self?.lastTranscription = finalText
+                self?.floatingPill.showDone("已保存到备忘录")
+                self?.statusBar.state = .idle
             }
         }
     }

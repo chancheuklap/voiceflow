@@ -7,11 +7,15 @@ public class VolcengineLLM: LLMProvider {
     private let baseURL: String
     private let model: String
 
+    /// 可重试的 HTTP 状态码（服务端临时故障）
+    private let retryableStatusCodes: Set<Int> = [429, 500, 502, 503, 504]
+
     /// 复用 URLSession（HTTP 连接池，避免每次请求重建 TLS）
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.httpMaximumConnectionsPerHost = 2
-        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForRequest = 10   // 包间沉默超时：防止 hang
+        config.timeoutIntervalForResource = 30  // 总请求超时：30 秒
         return URLSession(configuration: config)
     }()
 
@@ -32,14 +36,17 @@ public class VolcengineLLM: LLMProvider {
             personalPreference: preference
         )
 
+        // max_tokens 动态计算：至少 300，最多 1024，按输入字符数 ×3 估算
+        let dynamicMaxTokens = min(1024, max(300, text.count * 3))
+
         var body: [String: Any] = [
             "model": model,
             "messages": [
                 ["role": "system", "content": fullSystemPrompt],
                 ["role": "user", "content": preset.buildUserPrompt(asrText: text)],
             ],
-            "temperature": 0.3,
-            "max_tokens": 256,
+            "temperature": 0.1,
+            "max_tokens": dynamicMaxTokens,
         ]
 
         // Seed 系列模型：关闭深度思考（文字纠错不需要推理链）
@@ -53,7 +60,15 @@ public class VolcengineLLM: LLMProvider {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await session.data(for: request)
+        // 首次请求
+        var (data, response) = try await session.data(for: request)
+
+        // 遇到可重试状态码时，等 1 秒后重试一次
+        if let httpResp = response as? HTTPURLResponse,
+           retryableStatusCodes.contains(httpResp.statusCode) {
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            (data, response) = try await session.data(for: request)
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw LLMError.invalidResponse
