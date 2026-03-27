@@ -8,7 +8,7 @@ public struct Config: Codable {
     public var llmBaseURL: String?
     public var llmModel: String?
     /// 启用的 skill ID 列表（可同时开多个，prompt 会合并）
-    /// 可选值: grammar, filter, structure, formal, simplify
+    /// 可选值: grammar, filter, structure, formal, simplify, correction
     public var enabledSkills: [String]?
     public var startSound: FlexBool?
     public var stopSound: FlexBool?
@@ -17,7 +17,7 @@ public struct Config: Codable {
 
     /// 获取启用的 skill 列表（默认开启 grammar + filter）
     public var effectiveSkills: [String] {
-        return enabledSkills ?? ["grammar", "filter", "structure"]
+        return enabledSkills ?? ["grammar", "filter", "structure", "correction"]
     }
 
     public static let defaultConfig = Config(
@@ -27,7 +27,7 @@ public struct Config: Codable {
         llmApiKey: nil,
         llmBaseURL: "https://ark.cn-beijing.volces.com/api/v3",
         llmModel: "doubao-seed-2-0-lite-260215",
-        enabledSkills: ["grammar", "filter", "structure"],
+        enabledSkills: ["grammar", "filter", "structure", "correction"],
         startSound: FlexBool(true),
         stopSound: FlexBool(true),
         journalHotkey: HotkeyConfig(keyCode: 54, modifiers: []) // Right Command
