@@ -37,9 +37,9 @@ cat > "$APP_PATH/Contents/Info.plist" << PLIST
     <key>CFBundleIdentifier</key>
     <string>${BUNDLE_ID}</string>
     <key>CFBundleVersion</key>
-    <string>0.3.0</string>
+    <string>0.3.1</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.3.0</string>
+    <string>0.3.1</string>
     <key>CFBundleExecutable</key>
     <string>${APP_NAME}</string>
     <key>CFBundleIconFile</key>
