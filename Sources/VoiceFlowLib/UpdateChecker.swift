@@ -127,13 +127,14 @@ final class UpdateChecker {
             let newApp = tempDir.appendingPathComponent(appName).path
             let currentApp = Bundle.main.bundlePath
 
-            // 写安装脚本：rsync 原位替换保证路径不变，辅助功能权限保留
+            // 写安装脚本：rsync 原位替换 + codesign 重签名，保证 TCC 权限不丢失
             let scriptPath = "/tmp/vf_install_\(timestamp).sh"
             let script = """
             #!/bin/bash
             sleep 2
             /usr/bin/xattr -cr "\(newApp)"
             /usr/bin/rsync -a --delete "\(newApp)/" "\(currentApp)/"
+            /usr/bin/codesign -f -s - --identifier com.voiceflow.app "\(currentApp)"
             /usr/bin/open "\(currentApp)"
             /bin/rm -rf "\(tempDir.path)"
             /bin/rm -f "$0"

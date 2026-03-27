@@ -53,6 +53,8 @@ cat > "$APP_PATH/Contents/Info.plist" << PLIST
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>VoiceFlow 需要麦克风权限来进行语音输入</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>VoiceFlow 需要控制备忘录来保存语音日记</string>
 </dict>
 </plist>
 PLIST
@@ -83,6 +85,9 @@ cat > "$HOME/Library/LaunchAgents/com.voiceflow.app.plist" << LAUNCHD
 </dict>
 </plist>
 LAUNCHD
+
+# 签名（ad-hoc，确保 TCC 能正确识别 bundle identifier）
+codesign -f -s - --identifier "${BUNDLE_ID}" "$APP_PATH"
 
 echo ""
 echo "✓ 已安装到 ${APP_PATH}"

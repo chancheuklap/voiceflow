@@ -64,9 +64,15 @@ cat > "$DIST_DIR/$APP_NAME.app/Contents/Info.plist" << PLIST
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>VoiceFlow 需要麦克风权限来进行语音输入</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>VoiceFlow 需要控制备忘录来保存语音日记</string>
 </dict>
 </plist>
 PLIST
+
+# ── 步骤 3.5：签名（确保 TCC 按 bundle identifier 匹配权限）──
+echo "→ 签名..."
+codesign -f -s - --identifier com.voiceflow.app "$DIST_DIR/$APP_NAME.app"
 
 # ── 步骤 4：压缩 zip ──
 echo "→ 压缩 zip..."
