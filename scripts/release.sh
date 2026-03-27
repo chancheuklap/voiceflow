@@ -92,11 +92,8 @@ echo "→ Cask 已更新"
 
 # ── 步骤 6：Git commit + tag ──
 echo "→ Git commit & tag..."
-# 先提交所有未暂存的源码改动（如有），再提交版本号/Cask
-if ! git diff --quiet || ! git diff --cached --quiet; then
-    git add -A
-    git commit -m "chore: 发版前提交未暂存变更"
-fi
+# 提交版本号、Cask 和其他已跟踪文件的变更（-u 排除未跟踪的构建产物）
+git add -u
 git add "$VERSION_FILE" "$CASK_FILE"
 git commit -m "chore: 发版 v$VERSION"
 git tag "v$VERSION"

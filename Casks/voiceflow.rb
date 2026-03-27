@@ -1,6 +1,6 @@
 cask "voiceflow" do
-  version "0.3.2"
-  sha256 "8a0ed1d542d9f251f8f78abebf5057920d250ee4b4815e857d44c1c85f709561"
+  version "0.3.3"
+  sha256 "591138f9aee5e6ba2a0ecffef14440a88233b323919a2e5ed8f65a677275b335"
 
   url "https://github.com/chancheuklap/voiceflow/releases/download/v#{version}/VoiceFlow.app.zip"
   name "VoiceFlow"
