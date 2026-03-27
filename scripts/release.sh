@@ -72,7 +72,9 @@ PLIST
 
 # ── 步骤 3.5：签名（确保 TCC 按 bundle identifier 匹配权限）──
 echo "→ 签名..."
-codesign -f -s - --identifier com.voiceflow.app "$DIST_DIR/$APP_NAME.app"
+codesign -f -s - --identifier com.voiceflow.app \
+    -r='designated => identifier "com.voiceflow.app"' \
+    "$DIST_DIR/$APP_NAME.app"
 
 # ── 步骤 4：压缩 zip ──
 echo "→ 压缩 zip..."

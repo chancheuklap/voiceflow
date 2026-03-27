@@ -86,8 +86,11 @@ cat > "$HOME/Library/LaunchAgents/com.voiceflow.app.plist" << LAUNCHD
 </plist>
 LAUNCHD
 
-# 签名（ad-hoc，确保 TCC 能正确识别 bundle identifier）
-codesign -f -s - --identifier "${BUNDLE_ID}" "$APP_PATH"
+# 签名：自定义 designated requirement 只匹配 identifier，不匹配 cdhash
+# 这样更新二进制后 macOS TCC 权限不会失效
+codesign -f -s - --identifier "${BUNDLE_ID}" \
+    -r="designated => identifier \"${BUNDLE_ID}\"" \
+    "$APP_PATH"
 
 echo ""
 echo "✓ 已安装到 ${APP_PATH}"

@@ -134,7 +134,7 @@ final class UpdateChecker {
             sleep 2
             /usr/bin/xattr -cr "\(newApp)"
             /usr/bin/rsync -a --delete "\(newApp)/" "\(currentApp)/"
-            /usr/bin/codesign -f -s - --identifier com.voiceflow.app "\(currentApp)"
+            /usr/bin/codesign -f -s - --identifier com.voiceflow.app -r='designated => identifier "com.voiceflow.app"' "\(currentApp)"
             /usr/bin/open "\(currentApp)"
             /bin/rm -rf "\(tempDir.path)"
             /bin/rm -f "$0"
